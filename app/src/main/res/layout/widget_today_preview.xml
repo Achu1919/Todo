@@ -2,12 +2,12 @@
 <!-- v0.8: static widget-picker preview of the Today widget (sample tasks). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="match_parent"
-    android:orientation="vertical" android:background="@drawable/widget_preview_bg"
+    android:orientation="vertical" android:background="@drawable/widget_bg"
     android:paddingStart="16dp" android:paddingEnd="16dp" android:paddingTop="12dp" android:paddingBottom="12dp">
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginBottom="6dp">
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Today" android:textSize="20sp" android:fontFamily="serif" android:textColor="@color/widget_ink" />
         <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:text="4" android:textSize="13sp" android:textColor="@color/widget_ink_secondary" />
-        <FrameLayout android:layout_width="34dp" android:layout_height="34dp" android:background="@drawable/widget_preview_plus_bg">
+        <FrameLayout android:layout_width="34dp" android:layout_height="34dp" android:background="@drawable/widget_plus_bg">
             <ImageView android:layout_width="18dp" android:layout_height="18dp" android:layout_gravity="center" android:src="@drawable/ic_widget_plus" android:tint="@color/widget_on_ink" android:importantForAccessibility="no" />
         </FrameLayout>
     </LinearLayout>
@@ -28,7 +28,7 @@
         <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginStart="6dp"
             android:text="Team sync notes" android:textSize="14sp" android:textColor="@color/widget_ink" android:maxLines="1" android:ellipsize="end" />
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="8dp"
-            android:text="11:30" android:textSize="12sp" android:textColor="@color/widget_ink_secondary" />
+            android:text="11:30 am" android:textSize="12sp" android:textColor="@color/widget_ink_secondary" />
     </LinearLayout>
     <LinearLayout android:layout_width="match_parent" android:layout_height="36dp" android:orientation="horizontal" android:gravity="center_vertical">
         <ImageView android:layout_width="30dp" android:layout_height="20dp" android:src="@drawable/ic_widget_ring" android:tint="@color/widget_ring" android:importantForAccessibility="no" />

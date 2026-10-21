@@ -52,15 +52,14 @@ import dev.saikrishna.todo.ui.capture.AddTaskTileService
 import kotlinx.coroutines.flow.first
 import java.time.Instant
 
-/** Our widget palette (light / dark), from the app's paper-raised, ink and accent tokens. */
+/** Our widget palette (light / dark), from the app's ink and accent tokens; the background and
+ * "+" fill are res colours (widget_bg / widget_ink, values + values-night). */
 internal object WidgetColors {
-    val background = ColorProvider(day = Color(0xF5E6EBF3), night = Color(0xF51B202B))
     val ink = ColorProvider(day = Color(0xFF1B1C20), night = Color(0xFFF1F2F5))
     val inkSecondary = ColorProvider(day = Color(0x801B1C20), night = Color(0x8CF1F2F5))
-    val ring = ColorProvider(day = Color(0x4D1B1C20), night = Color(0x52F1F2F5))
+    val ring = ColorProvider(day = Color(0xFFA6ABB3), night = Color(0xFF60646E)) // opaque: tints drop alpha on some hosts
     val accent = ColorProvider(day = Color(0xFFE9562B), night = Color(0xFFFF7247))
     val danger = ColorProvider(day = Color(0xFFD63A40), night = Color(0xFFEC5F63))
-    val plusFill = ColorProvider(day = Color(0xFF1B1C20), night = Color(0xFFF1F2F5))
     val onInk = ColorProvider(day = Color(0xFFF7F8FA), night = Color(0xFF15161A))
 }
 
@@ -117,7 +116,9 @@ fun TodayWidgetContent(context: Context, data: WidgetData) {
         GlanceModifier
             .fillMaxSize()
             .cornerRadius(24.dp)
-            .background(WidgetColors.background)
+            // Rounded shape drawable (day/night colours in res): rounded even where the host
+            // does not clip to the corner radius.
+            .background(ImageProvider(R.drawable.widget_bg))
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -135,7 +136,7 @@ fun TodayWidgetContent(context: Context, data: WidgetData) {
                 GlanceModifier
                     .size(34.dp)
                     .cornerRadius(17.dp)
-                    .background(WidgetColors.plusFill)
+                    .background(ImageProvider(R.drawable.widget_plus_bg))
                     .clickable(actionStartActivity(AddTaskTileService.captureIntent(context)))
                     .semantics { contentDescription = "Add a task" },
                 contentAlignment = Alignment.Center,

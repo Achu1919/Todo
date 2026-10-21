@@ -5,7 +5,7 @@
     <color name="widget_bg">#F5E6EBF3</color>
     <color name="widget_ink">#1B1C20</color>
     <color name="widget_ink_secondary">#801B1C20</color>
-    <color name="widget_ring">#4D1B1C20</color>
+    <color name="widget_ring">#FFA6ABB3</color>
     <color name="widget_on_ink">#F7F8FA</color>
     <color name="widget_danger">#D63A40</color>
 </resources>

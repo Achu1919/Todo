@@ -80,6 +80,8 @@ import dev.saikrishna.todo.ui.motion.Tweens
 import dev.saikrishna.todo.ui.theme.AppTheme
 import dev.saikrishna.todo.ui.theme.Shapes
 import dev.saikrishna.todo.ui.theme.Spacing
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -149,8 +151,13 @@ fun PlanScreen(vm: TodoViewModel, onBack: () -> Unit) {
             if (reduced) {
                 alpha.animateTo(0f, tween(75))
             } else {
-                if (ex != 0f) launch { dx.animateTo(ex * 1.25f, Springs.Smooth.float) }
-                dy.animateTo(ey * 1.1f, Springs.Smooth.float)
+                // The card is flung toward a point well past the edge on Smooth and released the
+                // moment it is fully off-screen (still moving, no settle tail), so the next card is
+                // live after ~0.3 s.
+                val (anim, target, gone) = if (ex != 0f) Triple(dx, ex * 1.6f, 1.2f) else Triple(dy, ey * 1.4f, 1.0f)
+                val flight = launch { anim.animateTo(target, Springs.Smooth.float) }
+                snapshotFlow { kotlin.math.abs(anim.value) >= gone || !flight.isActive }.first { it }
+                flight.cancel()
             }
             s.index++
             dx.snapTo(0f); dy.snapTo(0f)
@@ -300,11 +307,13 @@ private fun PlanCard(
     Box(
         modifier
             .fillMaxWidth()
-            .heightIn(min = 220.dp)
+            .heightIn(min = 240.dp)
+            // Opaque base under the glass tint: the cards stacked behind never show through.
+            .background(c.paperRaised, Shapes.xl)
             .glassSurface(Shapes.xl, GlassLevel.Mid, c.glassCard)
             .clip(Shapes.xl),
     ) {
-        Column(Modifier.fillMaxWidth().padding(22.dp)) {
+        Column(Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 22.dp, bottom = 52.dp)) {
             val sectionColor = when (item.section) {
                 PlanSection.Overdue -> c.danger
                 PlanSection.Today -> c.accent
@@ -332,14 +341,22 @@ private fun PlanCard(
                 }
             }
         }
-        // Swipe hints: "Today" fades in at the top left as the card moves right, "Tomorrow" at the top right.
+        // Footer: a quiet swipe hint at rest; while dragging it gives way to "Today" (bottom left,
+        // card moving right) or "Tomorrow" (bottom right, card moving left).
+        if (!LocalReducedMotion.current) {
+            Text(
+                "Swipe right for today · left for tomorrow", style = AppTheme.type.meta, color = c.inkTertiary,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp)
+                    .graphicsLayer { alpha = 1f - (kotlin.math.abs(hint()) / 0.14f).coerceIn(0f, 1f) },
+            )
+        }
         Text(
             "TODAY", style = AppTheme.type.label, color = c.success,
-            modifier = Modifier.align(Alignment.TopStart).padding(18.dp).graphicsLayer { alpha = (hint() / 0.28f).coerceIn(0f, 1f) },
+            modifier = Modifier.align(Alignment.BottomStart).padding(start = 22.dp, bottom = 18.dp).graphicsLayer { alpha = (hint() / 0.28f).coerceIn(0f, 1f) },
         )
         Text(
             "TOMORROW", style = AppTheme.type.label, color = c.accent,
-            modifier = Modifier.align(Alignment.TopEnd).padding(18.dp).graphicsLayer { alpha = (-hint() / 0.28f).coerceIn(0f, 1f) },
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 22.dp, bottom = 18.dp).graphicsLayer { alpha = (-hint() / 0.28f).coerceIn(0f, 1f) },
         )
     }
 }
@@ -424,6 +441,6 @@ private fun SummaryRow(label: String, n: Int) {
     val c = AppTheme.colors
     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, style = AppTheme.type.body, color = c.ink, modifier = Modifier.weight(1f))
-        Text("$n", style = AppTheme.type.mono, color = if (n > 0) c.ink else c.inkTertiary)
+        Text("$n", style = AppTheme.type.body.copy(fontFeatureSettings = "tnum"), color = if (n > 0) c.ink else c.inkTertiary)
     }
 }
