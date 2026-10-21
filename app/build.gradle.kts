@@ -1,0 +1,119 @@
+plugins {
+    alias(libs.plugins.android.application)
+    // AGP 9 has built-in Kotlin support, so org.jetbrains.kotlin.android is not applied.
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
+}
+
+android {
+    namespace = "dev.saikrishna.todo"
+    compileSdk = 37
+
+    defaultConfig {
+        applicationId = "dev.saikrishna.todo"
+        minSdk = 33
+        targetSdk = 37
+        versionCode = 13
+        versionName = "0.7.4"
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.getByName("debug")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    buildFeatures { compose = true }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+        // Robolectric needs merged resources/assets (fonts) for the screenshot tests.
+        unitTests.isIncludeAndroidResources = true
+        unitTests.all {
+            it.systemProperty("roborazzi.test.record", "true")
+            it.systemProperty("robolectric.pixelCopyRenderMode", "hardware")
+            it.systemProperty("shots.dir", rootProject.layout.projectDirectory.dir("out/shots").asFile.absolutePath)
+            it.maxHeapSize = "1536m"
+            // Robolectric on JDK 21 needs these for SDK 36's FileDescriptor interceptor.
+            it.jvmArgs(
+                "--add-exports=java.base/jdk.internal.access=ALL-UNNAMED",
+                "--add-opens=java.base/java.io=ALL-UNNAMED",
+                "--add-opens=java.base/jdk.internal.access=ALL-UNNAMED",
+            )
+            // Screenshot tests are opt-in: ./gradlew testDebugUnitTest -Pshots
+            if (!project.hasProperty("shots")) it.exclude("**/*ScreenshotTest*")
+        }
+    }
+}
+
+composeCompiler {
+    // Stability reports: ./gradlew assembleRelease -> app/build/compose_compiler/
+    reportsDestination = layout.buildDirectory.dir("compose_compiler")
+    metricsDestination = layout.buildDirectory.dir("compose_compiler")
+    stabilityConfigurationFiles.add(rootProject.layout.projectDirectory.file("compose-stability.conf"))
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
+dependencies {
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.foundation)
+    implementation(libs.androidx.compose.animation)
+    implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    debugImplementation(libs.androidx.compose.ui.tooling)
+
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.core.splashscreen)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+
+    implementation(libs.androidx.graphics.shapes)
+    implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.profileinstaller)
+    implementation(libs.haze)
+    implementation(libs.haze.blur)
+    // Drag to reorder (Apache 2.0): LazyColumn + Column reordering with auto-scroll.
+    implementation(libs.reorderable)
+
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
+
+    testImplementation(libs.junit)
+    // Screenshot tests (Robolectric native graphics + Roborazzi), run with -Pshots.
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
+}
+
+// Copy the debug APK to a stable path: out/todo-debug.apk
+val copyDebugApk = tasks.register<Copy>("copyDebugApk") {
+    from(layout.buildDirectory.dir("outputs/apk/debug")) { include("app-debug.apk") }
+    into(rootProject.layout.projectDirectory.dir("out"))
+    rename { "todo-debug.apk" }
+}
+tasks.matching { it.name == "assembleDebug" }.configureEach { finalizedBy(copyDebugApk) }
+
+// Copy the release APK (debug-signed for now) to out/todo-release.apk
+val copyReleaseApk = tasks.register<Copy>("copyReleaseApk") {
+    from(layout.buildDirectory.dir("outputs/apk/release")) { include("app-release.apk") }
+    into(rootProject.layout.projectDirectory.dir("out"))
+    rename { "todo-release.apk" }
+}
+tasks.matching { it.name == "assembleRelease" }.configureEach { finalizedBy(copyReleaseApk) }

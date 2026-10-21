@@ -1,0 +1,121 @@
+package dev.saikrishna.todo.data
+
+import android.content.Context
+import androidx.compose.runtime.Immutable
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
+import dev.saikrishna.todo.domain.FocusMode
+import dev.saikrishna.todo.domain.FocusSchedule
+import java.time.DayOfWeek
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+
+enum class ThemeMode {
+    System, Light, Dark;
+
+    fun isDark(systemDark: Boolean): Boolean = when (this) {
+        System -> systemDark
+        Light -> false
+        Dark -> true
+    }
+
+    companion object {
+        fun parse(name: String?): ThemeMode = entries.firstOrNull { it.name == name } ?: System
+    }
+}
+
+@Immutable
+data class AppSettings(
+    val reduceMotion: Boolean = false,
+    val haptics: Boolean = true,
+    val theme: ThemeMode = ThemeMode.System,
+) {
+    companion object {
+        /** Pure mapping from stored values (any may be missing) to settings with defaults. */
+        fun from(reduceMotion: Boolean?, haptics: Boolean?, theme: String?): AppSettings = AppSettings(
+            reduceMotion = reduceMotion ?: false,
+            haptics = haptics ?: true,
+            theme = ThemeMode.parse(theme),
+        )
+    }
+}
+
+private val Context.settingsStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
+
+class SettingsRepository(context: Context) {
+    private val store = context.applicationContext.settingsStore
+
+    private object Keys {
+        val ReduceMotion = booleanPreferencesKey("reduce_motion")
+        val Haptics = booleanPreferencesKey("haptics")
+        val Theme = stringPreferencesKey("theme")
+        val AskedNotifications = booleanPreferencesKey("asked_notifications")
+        val FocusManual = stringPreferencesKey("focus_manual")
+        val FocusManualAt = longPreferencesKey("focus_manual_at")
+        val FocusAuto = booleanPreferencesKey("focus_auto")
+        val FocusDays = stringPreferencesKey("focus_days")
+        val FocusStart = intPreferencesKey("focus_start")
+        val FocusEnd = intPreferencesKey("focus_end")
+        val FocusOutside = stringPreferencesKey("focus_outside")
+    }
+
+    val settings: Flow<AppSettings> = store.data.map { p ->
+        AppSettings.from(p[Keys.ReduceMotion], p[Keys.Haptics], p[Keys.Theme])
+    }
+
+    suspend fun setReduceMotion(on: Boolean) { store.edit { it[Keys.ReduceMotion] = on } }
+    suspend fun setHaptics(on: Boolean) { store.edit { it[Keys.Haptics] = on } }
+    suspend fun setTheme(mode: ThemeMode) { store.edit { it[Keys.Theme] = mode.name } }
+
+    /** v0.6: the notification permission is asked once, in context (first timed task). */
+    val askedNotifications: Flow<Boolean> = store.data.map { it[Keys.AskedNotifications] ?: false }
+    suspend fun markAskedNotifications() { store.edit { it[Keys.AskedNotifications] = true } }
+
+    /** v0.7 focus: the manual pick (with when it was made) and the automatic schedule. */
+    val focus: Flow<FocusPrefs> = store.data.map { p ->
+        val d = FocusSchedule()
+        FocusPrefs(
+            manual = FocusMode.parse(p[Keys.FocusManual]),
+            manualAt = p[Keys.FocusManualAt],
+            schedule = FocusSchedule(
+                enabled = p[Keys.FocusAuto] ?: false,
+                days = p[Keys.FocusDays]?.let(::parseDays) ?: d.days,
+                start = p[Keys.FocusStart] ?: d.start,
+                end = p[Keys.FocusEnd] ?: d.end,
+                outside = FocusMode.parse(p[Keys.FocusOutside]) ?: d.outside,
+            ),
+        )
+    }
+
+    suspend fun setFocus(mode: FocusMode, at: Long) {
+        store.edit { it[Keys.FocusManual] = mode.name; it[Keys.FocusManualAt] = at }
+    }
+
+    suspend fun setSchedule(s: FocusSchedule) {
+        store.edit {
+            it[Keys.FocusAuto] = s.enabled
+            it[Keys.FocusDays] = s.days.sorted().joinToString(",") { d -> d.value.toString() }
+            it[Keys.FocusStart] = s.start
+            it[Keys.FocusEnd] = s.end
+            it[Keys.FocusOutside] = s.outside.name
+            // Turning the schedule on hands control to it.
+            it.remove(Keys.FocusManual); it.remove(Keys.FocusManualAt)
+        }
+    }
+
+    private fun parseDays(s: String): Set<DayOfWeek> =
+        s.split(',').mapNotNull { it.trim().toIntOrNull()?.takeIf { v -> v in 1..7 }?.let(DayOfWeek::of) }.toSet()
+}
+
+@Immutable
+data class FocusPrefs(
+    val manual: FocusMode? = null,
+    val manualAt: Long? = null,
+    val schedule: FocusSchedule = FocusSchedule(),
+)

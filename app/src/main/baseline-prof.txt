@@ -1,0 +1,15 @@
+# Hand-written baseline profile (installed by androidx.profileinstaller).
+# App code: everything on the startup / list / sheet / navigation paths.
+HSPLdev/saikrishna/todo/**->**(**)**
+Ldev/saikrishna/todo/**;
+# Compose runtime, UI, foundation (lazy lists, text), animation and Material 3 pieces we use.
+HSPLandroidx/compose/runtime/**->**(**)**
+HSPLandroidx/compose/ui/**->**(**)**
+HSPLandroidx/compose/foundation/**->**(**)**
+HSPLandroidx/compose/animation/**->**(**)**
+HSPLandroidx/compose/material3/SwipeToDismissBox**->**(**)**
+HSPLandroidx/navigationevent/**->**(**)**
+HSPLandroidx/room/**->**(**)**
+HSPLandroidx/graphics/shapes/**->**(**)**
+HSPLdev/chrisbanes/haze/**->**(**)**
+HSPLkotlinx/coroutines/**->**(**)**
