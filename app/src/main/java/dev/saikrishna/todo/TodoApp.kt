@@ -11,6 +11,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 class TodoApp : Application() {
@@ -25,6 +26,18 @@ class TodoApp : Application() {
         startReminderSync()
         // v0.8: the morning planning alarm follows its setting (and is re-armed at every start).
         appScope.launch { settings.plan.distinctUntilChanged().collect { dev.saikrishna.todo.reminders.PlanReminder.sync(this@TodoApp, it) } }
+        startWidgetSync()
+    }
+
+    /** v0.8: the Today widget redraws whenever what it shows changes (not on every write). */
+    private fun startWidgetSync() = appScope.launch {
+        repository.tasks
+            .map { tasks ->
+                val today = java.time.Instant.ofEpochMilli(repository.now()).atZone(repository.zone()).toLocalDate()
+                dev.saikrishna.todo.widget.WidgetData.build(tasks, today)
+            }
+            .distinctUntilChanged()
+            .collect { runCatching { dev.saikrishna.todo.widget.TodayWidget.refresh(this@TodoApp) } }
     }
 
     /**

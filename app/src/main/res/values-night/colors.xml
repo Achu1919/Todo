@@ -2,4 +2,10 @@
     <color name="paper">#0E0F12</color>
     <color name="ink">#F3F2EE</color>
     <color name="accent">#7480F0</color>
+    <color name="widget_bg">#F51B202B</color>
+    <color name="widget_ink">#F1F2F5</color>
+    <color name="widget_ink_secondary">#8CF1F2F5</color>
+    <color name="widget_ring">#52F1F2F5</color>
+    <color name="widget_on_ink">#15161A</color>
+    <color name="widget_danger">#EC5F63</color>
 </resources>

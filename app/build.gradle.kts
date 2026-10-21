@@ -87,6 +87,8 @@ dependencies {
     implementation(libs.haze.blur)
     // Drag to reorder (Apache 2.0): LazyColumn + Column reordering with auto-scroll.
     implementation(libs.reorderable)
+    // v0.8 home-screen widget (Apache 2.0).
+    implementation(libs.glance.appwidget)
 
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)

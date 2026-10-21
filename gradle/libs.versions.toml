@@ -17,6 +17,7 @@ junit = "4.13.2"
 robolectric = "4.17"
 roborazzi = "1.76.0"
 reorderable = "3.1.0"
+glance = "1.2.0"
 
 [libraries]
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
@@ -42,6 +43,7 @@ androidx-profileinstaller = { group = "androidx.profileinstaller", name = "profi
 haze = { group = "dev.chrisbanes.haze", name = "haze", version.ref = "haze" }
 haze-blur = { group = "dev.chrisbanes.haze", name = "haze-blur", version.ref = "haze" }
 reorderable = { group = "sh.calvin.reorderable", name = "reorderable", version.ref = "reorderable" }
+glance-appwidget = { group = "androidx.glance", name = "glance-appwidget", version.ref = "glance" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 roborazzi = { group = "io.github.takahirom.roborazzi", name = "roborazzi", version.ref = "roborazzi" }
