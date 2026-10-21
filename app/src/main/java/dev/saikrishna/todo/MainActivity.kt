@@ -77,5 +77,6 @@ class MainActivity : ComponentActivity() {
     private fun handleOpen(intent: Intent?) {
         val id = intent?.getLongExtra(Reminders.EXTRA_OPEN_TASK, -1L) ?: -1L
         if (id >= 0) vm.requestOpen(id)
+        if (intent?.getBooleanExtra(dev.saikrishna.todo.reminders.PlanReminder.EXTRA_OPEN_PLAN, false) == true) vm.requestPlan()
     }
 }

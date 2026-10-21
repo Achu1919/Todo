@@ -58,7 +58,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 /** Plain enum keys: saved by name. */
-enum class Screen { Home, Search, Settings, Licenses, Lists, Templates }
+enum class Screen { Home, Search, Settings, Licenses, Lists, Templates, Plan }
 
 private val BackStackSaver = listSaver<SnapshotStateList<Screen>, String>(
     save = { stack -> stack.map { it.name } },
@@ -205,6 +205,17 @@ fun AppNav(vm: TodoViewModel, modifier: Modifier = Modifier) {
         if (openRequest != null && stack.size > 1) nav.popToRoot()
     }
 
+    // v0.8: the planning notification opens the planning screen (over Home).
+    val planRequest by vm.planRequest.collectAsState()
+    LaunchedEffect(planRequest) {
+        if (!planRequest) return@LaunchedEffect
+        vm.consumePlanRequest()
+        if (stack.last() != Screen.Plan) {
+            if (stack.size > 1) nav.popToRoot()
+            nav.push(Screen.Plan)
+        }
+    }
+
     PredictiveBackHandler(enabled = stack.size > 1) { progress ->
         try {
             progress.collect { e -> nav.preview(e.progress) }
@@ -265,6 +276,7 @@ fun AppNav(vm: TodoViewModel, modifier: Modifier = Modifier) {
                                         onOpenLists = { nav.push(Screen.Lists) },
                                         onOpenTemplates = { nav.push(Screen.Templates) },
                                         isTop = { stack.last() == Screen.Home && nav.exiting == null && !nav.moving },
+                                        onOpenPlan = { nav.push(Screen.Plan) },
                                     )
                                     Screen.Search -> SearchScreen(vm, onBack = nav::pop)
                                     Screen.Settings -> SettingsScreen(
@@ -276,6 +288,7 @@ fun AppNav(vm: TodoViewModel, modifier: Modifier = Modifier) {
                                     Screen.Licenses -> LicensesScreen(onBack = nav::pop)
                                     Screen.Lists -> ListsScreen(vm, onBack = nav::pop)
                                     Screen.Templates -> TemplatesScreen(vm, onBack = nav::pop)
+                                    Screen.Plan -> dev.saikrishna.todo.ui.plan.PlanScreen(vm, onBack = nav::pop)
                                 }
                             }
                         }

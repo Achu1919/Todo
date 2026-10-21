@@ -10,6 +10,7 @@ import dev.saikrishna.todo.reminders.Reminders
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 class TodoApp : Application() {
@@ -22,6 +23,8 @@ class TodoApp : Application() {
         super.onCreate()
         Reminders.ensureChannel(this)
         startReminderSync()
+        // v0.8: the morning planning alarm follows its setting (and is re-armed at every start).
+        appScope.launch { settings.plan.distinctUntilChanged().collect { dev.saikrishna.todo.reminders.PlanReminder.sync(this@TodoApp, it) } }
     }
 
     /**

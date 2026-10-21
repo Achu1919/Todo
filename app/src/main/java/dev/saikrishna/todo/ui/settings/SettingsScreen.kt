@@ -108,6 +108,9 @@ fun SettingsScreen(
         GroupLabel("Focus")
         FocusScheduleCard(vm)
 
+        GroupLabel("Planning")
+        PlanningCard(vm)
+
         GroupLabel("Appearance")
         Card {
             Column(Modifier.padding(16.dp)) {
@@ -255,5 +258,39 @@ internal fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChan
             Text(subtitle, style = AppTheme.type.meta, color = c.inkSecondary)
         }
         MotionSwitch(checked = checked, onCheckedChange = onChange, label = title)
+    }
+}
+
+/** v0.8: the optional morning "Plan your day" nudge (off by default, 8:00 when turned on). */
+@Composable
+private fun PlanningCard(vm: TodoViewModel) {
+    val prefs by vm.planPrefs.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    var picking by remember { mutableStateOf(false) }
+    val permission = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { }
+    Card {
+        SwitchRow(
+            title = "Plan your day",
+            subtitle = if (prefs.enabled) "A nudge at ${dev.saikrishna.todo.domain.QuickParse.timeLabel(prefs.minute)} to sort overdue and today's tasks."
+            else "Off. You can still plan from the list menu on Today.",
+            checked = prefs.enabled,
+            onChange = { on ->
+                vm.setPlan(prefs.copy(enabled = on))
+                if (on && !Reminders.notificationsAllowed(context)) permission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            },
+        )
+        if (prefs.enabled) {
+            Divider()
+            LinkRow(title = "Time", subtitle = dev.saikrishna.todo.domain.QuickParse.timeLabel(prefs.minute), onClick = { picking = true })
+        }
+    }
+    if (picking) {
+        dev.saikrishna.todo.ui.panel.TimePickDialog(
+            initialMinute = prefs.minute,
+            onSet = { m -> picking = false; vm.setPlan(prefs.copy(minute = m)) },
+            onDismiss = { picking = false },
+        )
     }
 }

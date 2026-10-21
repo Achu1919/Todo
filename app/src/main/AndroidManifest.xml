@@ -38,6 +38,38 @@
             </intent-filter>
         </activity>
 
+        <!-- v0.8 quick capture: floating card over the current app (share sheet, QS tile, widget). -->
+        <activity
+            android:name=".ui.capture.CaptureActivity"
+            android:exported="true"
+            android:label="@string/capture_label"
+            android:theme="@style/Theme.Todo.Capture"
+            android:taskAffinity="dev.saikrishna.todo.capture"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="stateVisible|adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".ui.capture.AddTaskTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_add"
+            android:label="@string/tile_add_task"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <receiver
+            android:name=".reminders.PlanReceiver"
+            android:exported="false" />
+
         <receiver
             android:name=".reminders.ReminderReceiver"
             android:exported="false" />

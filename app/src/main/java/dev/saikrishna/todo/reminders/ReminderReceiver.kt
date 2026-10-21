@@ -7,6 +7,7 @@ import dev.saikrishna.todo.TodoApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.Instant
 
@@ -64,6 +65,7 @@ class RescheduleReceiver : BroadcastReceiver() {
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
                 app.repository.timed().forEach { Reminders.sync(app, it) }
+                PlanReminder.sync(app, app.settings.plan.first())
             } finally {
                 pending.finish()
             }

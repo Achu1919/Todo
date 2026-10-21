@@ -160,6 +160,10 @@ fun ListPickerContent(
     onSelect: (Long?) -> Unit,
     onFocus: (FocusMode) -> Unit,
     onManage: () -> Unit,
+    /** v0.8: saved search views (open Search with the view) and morning planning. */
+    views: List<dev.saikrishna.todo.data.SavedView> = emptyList(),
+    onView: (dev.saikrishna.todo.data.SavedView) -> Unit = {},
+    onPlan: (() -> Unit)? = null,
 ) {
     val c = AppTheme.colors
     val haptics = LocalHaptics.current
@@ -194,6 +198,33 @@ fun ListPickerContent(
                 selected = selected == l.id,
             ) { haptics.tick(); onSelect(l.id) }
         }
+        if (views.isNotEmpty()) {
+            Text("Saved views", style = AppTheme.type.meta, color = c.inkSecondary, modifier = Modifier.padding(start = 22.dp, top = 10.dp, bottom = 2.dp))
+            for (v in views) MenuLinkRow(AppIcons.Bookmark, v.name) { haptics.tick(); onView(v) }
+        }
+        if (onPlan != null) {
+            Spacer(Modifier.height(4.dp))
+            MenuLinkRow(AppIcons.Sun, "Plan your day") { haptics.tick(); onPlan() }
+        }
+    }
+}
+
+/** v0.8 menu row that goes somewhere (saved view, planning): icon, label, chevron. */
+@Composable
+private fun MenuLinkRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
+    val c = AppTheme.colors
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, tint = c.inkSecondary, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(12.dp))
+        Text(label, style = AppTheme.type.body, color = c.ink, modifier = Modifier.weight(1f), maxLines = 1)
+        Icon(AppIcons.ChevronRight, null, tint = c.inkTertiary, modifier = Modifier.size(18.dp))
     }
 }
 

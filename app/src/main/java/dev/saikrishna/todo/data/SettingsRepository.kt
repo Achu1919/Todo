@@ -63,6 +63,14 @@ class SettingsRepository(context: Context) {
         val FocusStart = intPreferencesKey("focus_start")
         val FocusEnd = intPreferencesKey("focus_end")
         val FocusOutside = stringPreferencesKey("focus_outside")
+        val PlanEnabled = booleanPreferencesKey("plan_enabled")
+        val PlanMinute = intPreferencesKey("plan_minute")
+    }
+
+    /** v0.8 morning planning: off by default; 8:00 when turned on. */
+    val plan: Flow<PlanPrefs> = store.data.map { p -> PlanPrefs(p[Keys.PlanEnabled] ?: false, p[Keys.PlanMinute] ?: PlanPrefs.DefaultMinute) }
+    suspend fun setPlan(prefs: PlanPrefs) {
+        store.edit { it[Keys.PlanEnabled] = prefs.enabled; it[Keys.PlanMinute] = prefs.minute.coerceIn(0, 24 * 60 - 1) }
     }
 
     val settings: Flow<AppSettings> = store.data.map { p ->
@@ -119,3 +127,8 @@ data class FocusPrefs(
     val manualAt: Long? = null,
     val schedule: FocusSchedule = FocusSchedule(),
 )
+
+@Immutable
+data class PlanPrefs(val enabled: Boolean = false, val minute: Int = DefaultMinute) {
+    companion object { const val DefaultMinute = 8 * 60 }
+}

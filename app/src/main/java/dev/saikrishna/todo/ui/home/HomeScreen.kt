@@ -136,6 +136,8 @@ fun HomeScreen(
      * (reminder tap) waits until it is, so the panel opens on a visible Home after the pop.
      */
     isTop: () -> Boolean = { true },
+    /** v0.8 morning planning (list menu entry). */
+    onOpenPlan: () -> Unit = {},
 ) {
     val tasks by vm.tasks.collectAsStateWithLifecycle()
     val lists by vm.lists.collectAsStateWithLifecycle()
@@ -144,6 +146,7 @@ fun HomeScreen(
     val focusPrefs by vm.focusPrefs.collectAsStateWithLifecycle()
     val selectedList by vm.selectedList.collectAsStateWithLifecycle()
     val undo by vm.undo.collectAsStateWithLifecycle()
+    val views by vm.views.collectAsStateWithLifecycle()
     val openRequest by vm.openRequest.collectAsStateWithLifecycle()
 
     val c = AppTheme.colors
@@ -307,7 +310,7 @@ fun HomeScreen(
             },
             anchors = anchors,
             onDrop = { outcome, id -> vm.applyDrop(outcome, id) },
-            onTag = { tag -> vm.setSearchFilter(SearchFilter(tag = tag)); onOpenSearch() },
+            onTag = { tag -> vm.setSearchFilter(SearchFilter(tag)); onOpenSearch() },
             onDragging = { if (it) HomeTestHooks.rowInput++; draggingRow = it },
         )
     }
@@ -490,7 +493,7 @@ fun HomeScreen(
                         onSaveAsTemplate = { vm.saveAsTemplate(task, today) },
                         onTag = { tag ->
                             panelTaskId = null
-                            vm.setSearchFilter(SearchFilter(tag = tag))
+                            vm.setSearchFilter(SearchFilter(tag))
                             onOpenSearch()
                         },
                         onSaveText = { t, n -> vm.setText(task.id, t, n) },
@@ -539,6 +542,13 @@ fun HomeScreen(
                     onSelect = { vm.selectList(it); menu = null },
                     onFocus = { vm.setFocus(it) },
                     onManage = { menu = null; onOpenLists() },
+                    views = views,
+                    onView = { v ->
+                        menu = null
+                        vm.setSearchFilter(SearchFilter(dev.saikrishna.todo.domain.ViewFilter.decode(v.filter), query = v.query))
+                        onOpenSearch()
+                    },
+                    onPlan = { menu = null; onOpenPlan() },
                 )
                 MenuIds.ADD_MENU -> AddMenuContent(
                     templates = templates,

@@ -53,9 +53,17 @@ data class UndoEvent(
     val completion: Completion? = null,
 )
 
-/** Search pre-filter (v0.7): a tag and/or a list, set by tapping a tag pill. */
+/**
+ * Search state shared with Home (v0.7 tag pill, v0.8 saved views from the list menu): the filter
+ * set, and a query to put in the field when Search opens (consumed once).
+ */
 @Immutable
-data class SearchFilter(val tag: String? = null, val listId: Long? = null)
+data class SearchFilter(
+    val filter: dev.saikrishna.todo.domain.ViewFilter = dev.saikrishna.todo.domain.ViewFilter(),
+    val query: String? = null,
+) {
+    constructor(tag: String) : this(dev.saikrishna.todo.domain.ViewFilter(tag = tag))
+}
 
 /** v0.7: an optimistic manual order / day change, shown until Room catches up. */
 @Immutable
@@ -88,6 +96,12 @@ class TodoViewModel(
         .map { all -> all.groupBy { it.taskId } }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
     val templates: StateFlow<List<Template>> = repository.templates.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    /** v0.8 saved search views. */
+    val views: StateFlow<List<dev.saikrishna.todo.data.SavedView>> = repository.views.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    fun saveView(name: String, query: String, filter: dev.saikrishna.todo.domain.ViewFilter) =
+        viewModelScope.launch { repository.saveView(name, query, filter.encode()) }
+    fun deleteView(id: Long) = viewModelScope.launch { repository.deleteView(id) }
+
     val focusPrefs: StateFlow<FocusPrefs> = settingsRepository.focus.stateIn(viewModelScope, SharingStarted.Eagerly, FocusPrefs())
 
     /** The list Home shows (null = all lists, within the focus mode). Activity-scoped. */
@@ -290,6 +304,23 @@ class TodoViewModel(
         private set
     fun requestOpen(id: Long, snooze: Boolean = false) { openAsSnooze = snooze; _openRequest.value = id }
     fun consumeOpenRequest() { _openRequest.value = null }
+
+    // ---- v0.8 morning planning ----
+    val planPrefs: StateFlow<dev.saikrishna.todo.data.PlanPrefs> = settingsRepository.plan
+        .stateIn(viewModelScope, SharingStarted.Eagerly, dev.saikrishna.todo.data.PlanPrefs())
+    fun setPlan(prefs: dev.saikrishna.todo.data.PlanPrefs) = viewModelScope.launch { settingsRepository.setPlan(prefs) }
+    private val _planRequest = MutableStateFlow(false)
+    /** The planning notification (or a widget/shortcut) asks for the planning screen. */
+    val planRequest: StateFlow<Boolean> = _planRequest.asStateFlow()
+    fun requestPlan() { _planRequest.value = true }
+    fun consumePlanRequest() { _planRequest.value = false }
+
+    /** One planning decision: completion goes through [setDone] (subtasks, repeats, undo-safe). */
+    fun applyPlan(change: dev.saikrishna.todo.domain.PlanChange) {
+        if (change.done) { setDone(change.id, true); return }
+        val day = change.newDay ?: return
+        viewModelScope.launch { repository.setDueKeepTime(change.id, day) }
+    }
 
     fun setReduceMotion(on: Boolean) = viewModelScope.launch { settingsRepository.setReduceMotion(on) }
     fun setHaptics(on: Boolean) = viewModelScope.launch { settingsRepository.setHaptics(on) }

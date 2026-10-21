@@ -562,10 +562,12 @@ private class LayoutHolder { var get by mutableStateOf<(() -> TextLayoutResult?)
 
 /** Small glass chips for what the parser recognised; tap removes that interpretation. */
 @Composable
-private fun ParseChips(
+internal fun ParseChips(
     tokens: List<QuickParse.Token>,
     onRemove: (QuickParse.Token) -> Unit,
     lists: List<dev.saikrishna.todo.data.TaskList> = emptyList(),
+    /** v0.8: the capture card insets its chips less than the full-width composer. */
+    inset: androidx.compose.ui.unit.Dp = 28.dp,
 ) {
     val c = AppTheme.colors
     fun listColor(t: QuickParse.Token): androidx.compose.ui.graphics.Color? =
@@ -585,7 +587,7 @@ private fun ParseChips(
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
                 // Full-bleed scroller; the chips start in line with the capsule.
-                .padding(start = 28.dp, end = 28.dp, bottom = 8.dp),
+                .padding(start = inset, end = inset, bottom = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             for (t in shown) key(t.key) { ParseChip(t, onRemove, listColor(t)) }

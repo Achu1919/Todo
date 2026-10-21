@@ -1,5 +1,17 @@
 package dev.saikrishna.todo.ui.search
 
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.contentDescription
+import dev.saikrishna.todo.data.Priority
+import dev.saikrishna.todo.domain.DueFilter
+import dev.saikrishna.todo.domain.StatusFilter
+import dev.saikrishna.todo.domain.ViewFilter
+import dev.saikrishna.todo.domain.filterTasks
+import java.time.LocalDate
+
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.first
 import dev.saikrishna.todo.ui.components.LocalNavMoving
@@ -76,22 +88,10 @@ import dev.saikrishna.todo.ui.theme.Spacing
 
 /**
  * Pure: case-insensitive match on title, notes or tags; open tasks first (oldest first), then done
- * (newest first). v0.7: optionally filtered by a tag and/or a list; with a filter, an empty query
- * lists everything that passes it.
+ * (newest first). Kept for v0.7 callers; v0.8 search uses [filterTasks] with a full [ViewFilter].
  */
-fun searchTasks(tasks: List<Task>, query: String, tag: String? = null, listId: Long? = null): List<Task> {
-    val q = query.trim().removePrefix("#")
-    if (q.isEmpty() && tag == null && listId == null) return emptyList()
-    val hits = tasks.filter { t ->
-        (tag == null || tag in t.tagList) &&
-            (listId == null || t.listId == listId) &&
-            (q.isEmpty() || t.title.contains(q, ignoreCase = true) || t.notes.contains(q, ignoreCase = true) ||
-                t.tagList.any { it.contains(q, ignoreCase = true) })
-    }
-    val (done, open) = hits.partition { it.done }
-    return open.sortedWith(compareBy<Task> { it.createdAt }.thenBy { it.id }) +
-        done.sortedByDescending { it.completedAt ?: it.createdAt }
-}
+fun searchTasks(tasks: List<Task>, query: String, tag: String? = null, listId: Long? = null, today: LocalDate = LocalDate.now()): List<Task> =
+    filterTasks(tasks, query, ViewFilter(listId = listId, tag = tag), today)
 
 /** Search (spec 6.12): pushed screen, autofocused field, live results that animate in/out/move. */
 @Composable
@@ -108,12 +108,22 @@ fun SearchScreen(vm: TodoViewModel, onBack: () -> Unit) {
     val filter by vm.searchFilter.collectAsStateWithLifecycle()
     val lists by vm.lists.collectAsStateWithLifecycle()
     val subtasks by vm.subtasks.collectAsStateWithLifecycle()
-    val results by remember(all, filter) { derivedStateOf { searchTasks(all, query.text.toString(), filter.tag, filter.listId) } }
+    val views by vm.views.collectAsStateWithLifecycle()
+    val f = filter.filter
+    val results by remember(all, f, today) { derivedStateOf { filterTasks(all, query.text.toString(), f, today) } }
+    // A saved view opened from the list menu brings its text.
+    LaunchedEffect(filter.query) {
+        val q = filter.query ?: return@LaunchedEffect
+        query.setTextAndPlaceCursorAtEnd(q)
+        vm.setSearchFilter(filter.copy(query = null))
+    }
+    fun setF(n: ViewFilter) { haptics.tick(); vm.setSearchFilter(filter.copy(filter = n)) }
+    var naming by remember { mutableStateOf(false) }
     val allTags = remember(all) { all.flatMap { it.tagList }.groupingBy { it }.eachCount().entries.sortedByDescending { it.value }.map { it.key } }
     val org = remember(lists, subtasks) { OrgView(lists = lists.associateBy { it.id }, showList = true, subtasks = subtasks) }
     // The pre-filter belongs to this visit only.
     DisposableEffect(Unit) { onDispose { vm.setSearchFilter(SearchFilter()) } }
-    val hasFilter = filter.tag != null || filter.listId != null
+    val hasFilter = !f.isEmpty
     // Autofocus only once the push has settled: opening the IME mid-transition re-lays-out the
     // whole screen every frame of the keyboard animation, on top of the slide.
     val moving = LocalNavMoving.current
@@ -159,6 +169,52 @@ fun SearchScreen(vm: TodoViewModel, onBack: () -> Unit) {
             }
         }
 
+        // v0.8: saved views (tap = apply, tap again = clear), then "Save view" when something is set.
+        val qText = query.text.toString().trim()
+        val active = views.firstOrNull { it.query == qText && ViewFilter.decode(it.filter) == f && (qText.isNotEmpty() || !f.isEmpty) }
+        if (views.isNotEmpty() || qText.isNotEmpty() || hasFilter) {
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = Spacing.screen).padding(bottom = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                for (v in views) {
+                    FilterChip(label = v.name, dot = null, selected = active?.id == v.id, icon = AppIcons.Bookmark) {
+                        haptics.tick()
+                        if (active?.id == v.id) { query.clearText(); vm.setSearchFilter(SearchFilter()) }
+                        else { query.setTextAndPlaceCursorAtEnd(v.query); vm.setSearchFilter(SearchFilter(ViewFilter.decode(v.filter))) }
+                    }
+                }
+                if (active != null) {
+                    ActionChip("Delete view") { haptics.tick(); vm.deleteView(active.id); query.clearText(); vm.setSearchFilter(SearchFilter()) }
+                } else if (qText.isNotEmpty() || hasFilter) {
+                    ActionChip("Save view") { haptics.tick(); naming = true }
+                }
+            }
+        }
+        if (naming) {
+            SaveViewRow(
+                suggested = suggestViewName(qText, f, lists),
+                onSave = { name -> vm.saveView(name, qText, f); naming = false },
+                onCancel = { naming = false },
+            )
+        }
+        // v0.8 filters: status, due, priority, reminder, recurring. Combine freely (all must hold).
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = Spacing.screen).padding(bottom = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            for (st in listOf(StatusFilter.Open, StatusFilter.Done)) {
+                FilterChip(st.label, null, f.status == st) { setF(f.copy(status = if (f.status == st) StatusFilter.Any else st)) }
+            }
+            for (d in DueFilter.entries) {
+                FilterChip(d.label, null, f.due == d) { setF(f.copy(due = if (f.due == d) null else d)) }
+            }
+            FilterChip("High priority", null, f.priority == Priority.High) { setF(f.copy(priority = if (f.priority == Priority.High) null else Priority.High)) }
+            FilterChip("Low priority", null, f.priority == Priority.Low) { setF(f.copy(priority = if (f.priority == Priority.Low) null else Priority.Low)) }
+            FilterChip("Reminder", null, f.reminder, icon = AppIcons.Clock) { setF(f.copy(reminder = !f.reminder)) }
+            FilterChip("Recurring", null, f.recurring, icon = AppIcons.Repeat) { setF(f.copy(recurring = !f.recurring)) }
+        }
         // v0.7 filters: lists, then tags in use. Tap to toggle.
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = Spacing.screen).padding(bottom = 6.dp),
@@ -168,13 +224,11 @@ fun SearchScreen(vm: TodoViewModel, onBack: () -> Unit) {
                 FilterChip(
                     label = listOfNotNull(l.emoji, l.name).joinToString(" "),
                     dot = c.listColor(l.color),
-                    selected = filter.listId == l.id,
-                ) { haptics.tick(); vm.setSearchFilter(filter.copy(listId = if (filter.listId == l.id) null else l.id)) }
+                    selected = f.listId == l.id,
+                ) { setF(f.copy(listId = if (f.listId == l.id) null else l.id)) }
             }
             for (t in allTags) {
-                FilterChip(label = "#$t", dot = null, selected = filter.tag == t) {
-                    haptics.tick(); vm.setSearchFilter(filter.copy(tag = if (filter.tag == t) null else t))
-                }
+                FilterChip(label = "#$t", dot = null, selected = f.tag == t) { setF(f.copy(tag = if (f.tag == t) null else t)) }
             }
         }
 
@@ -196,7 +250,7 @@ fun SearchScreen(vm: TodoViewModel, onBack: () -> Unit) {
                     TaskRow(
                         task = task,
                         meta = remember(task, today, org) { rowMeta(task, today, showDue = true, org = org) },
-                        onTag = { t -> haptics.tick(); vm.setSearchFilter(filter.copy(tag = t)) },
+                        onTag = { t -> haptics.tick(); vm.setSearchFilter(filter.copy(filter = f.copy(tag = t))) },
                         onCheckedChange = { checked ->
                             if (checked) haptics.thump() else haptics.tick()
                             vm.setDone(task.id, checked)
@@ -221,9 +275,74 @@ fun SearchScreen(vm: TodoViewModel, onBack: () -> Unit) {
     }
 }
 
+/** v0.8: a suggested name for a new saved view, from what is set ("Overdue · #bills · rent"). */
+fun suggestViewName(query: String, f: ViewFilter, lists: List<dev.saikrishna.todo.data.TaskList>): String = listOfNotNull(
+    f.listId?.let { id -> lists.firstOrNull { it.id == id }?.name },
+    f.due?.label,
+    f.status.takeIf { it != StatusFilter.Any }?.label,
+    f.priority?.let { "${it.name} priority" },
+    f.tag?.let { "#$it" },
+    "Reminders".takeIf { f.reminder },
+    "Recurring".takeIf { f.recurring },
+    query.takeIf { it.isNotBlank() }?.let { "“$it”" },
+).joinToString(" · ").take(40).ifEmpty { "My view" }
+
+/** Glass action chip ("Save view" / "Delete view"). */
+@Composable
+private fun ActionChip(label: String, onClick: () -> Unit) {
+    val c = AppTheme.colors
+    Box(
+        Modifier
+            .heightIn(min = 34.dp)
+            .glassControl(Shapes.full)
+            .clip(Shapes.full)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) { Text(label, style = AppTheme.type.label, color = c.accent, maxLines = 1) }
+}
+
+/** Inline "name this view" row: glass field + Save / Cancel. */
+@Composable
+private fun SaveViewRow(suggested: String, onSave: (String) -> Unit, onCancel: () -> Unit) {
+    val c = AppTheme.colors
+    val name = rememberTextFieldState(suggested)
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = Spacing.screen).padding(bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        BasicTextField(
+            state = name,
+            modifier = Modifier.weight(1f).height(40.dp).glassControl(Shapes.full).padding(horizontal = 14.dp).focusRequester(focus)
+                .semantics { contentDescription = "View name" },
+            textStyle = AppTheme.type.body.copy(color = c.ink),
+            cursorBrush = SolidColor(c.accent),
+            lineLimits = TextFieldLineLimits.SingleLine,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            onKeyboardAction = { if (name.text.isNotBlank()) onSave(name.text.toString()) },
+            decorator = { inner -> Box(Modifier.fillMaxHeight(), contentAlignment = Alignment.CenterStart) { inner() } },
+        )
+        Spacer(Modifier.width(6.dp))
+        ActionChip("Save") { if (name.text.isNotBlank()) onSave(name.text.toString()) }
+        Spacer(Modifier.width(6.dp))
+        Box(
+            Modifier.heightIn(min = 34.dp).clip(Shapes.full).clickable(role = Role.Button, onClick = onCancel).padding(horizontal = 10.dp),
+            contentAlignment = Alignment.Center,
+        ) { Text("Cancel", style = AppTheme.type.label, color = c.inkSecondary) }
+    }
+}
+
 /** Search filter chip: ink when selected; lists carry their colour dot. */
 @Composable
-private fun FilterChip(label: String, dot: androidx.compose.ui.graphics.Color?, selected: Boolean, onClick: () -> Unit) {
+private fun FilterChip(
+    label: String,
+    dot: androidx.compose.ui.graphics.Color?,
+    selected: Boolean,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    onClick: () -> Unit,
+) {
     val c = AppTheme.colors
     val fill by animateColorAsState(if (selected) c.ink else c.glassFill, Tweens.select(), label = "filter fill")
     val text by animateColorAsState(if (selected) c.onInk else c.ink, Tweens.select(), label = "filter text")
@@ -238,6 +357,10 @@ private fun FilterChip(label: String, dot: androidx.compose.ui.graphics.Color?, 
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (dot != null) { ListDot(dot, 8.dp); Spacer(Modifier.width(6.dp)) }
+        if (icon != null) {
+            androidx.compose.material3.Icon(icon, null, tint = text, modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(5.dp))
+        }
         BasicText(label, style = AppTheme.type.label, color = { text }, maxLines = 1)
     }
 }

@@ -224,4 +224,27 @@ object AppIcons {
             }
         }
     }
+
+    /** v0.8 planning: a small sun (circle + 8 short rays). */
+    val Sun: ImageVector by lazy {
+        icon("Sun") {
+            stroke(2f) {
+                moveTo(16f, 12f); arcTo(4f, 4f, 0f, true, true, 8f, 12f); arcTo(4f, 4f, 0f, true, true, 16f, 12f); close()
+            }
+            for (k in 0 until 8) {
+                val a = Math.toRadians(k * 45.0)
+                val c = kotlin.math.cos(a).toFloat(); val s = kotlin.math.sin(a).toFloat()
+                stroke(2f) { moveTo(12f + 6.5f * c, 12f + 6.5f * s); lineTo(12f + 8.8f * c, 12f + 8.8f * s) }
+            }
+        }
+    }
+
+    /** v0.8 saved views: a bookmark ribbon. */
+    val Bookmark: ImageVector by lazy {
+        icon("Bookmark") {
+            stroke(2f) {
+                moveTo(7f, 4.5f); lineTo(17f, 4.5f); lineTo(17f, 20f); lineTo(12f, 16.2f); lineTo(7f, 20f); close()
+            }
+        }
+    }
 }
