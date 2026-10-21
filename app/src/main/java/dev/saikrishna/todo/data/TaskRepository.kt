@@ -26,6 +26,8 @@ data class NewTask(
     val listId: Long = TaskList.PERSONAL,
     val tags: List<String> = emptyList(),
     val subtasks: List<String> = emptyList(),
+    /** v0.8: share-sheet capture puts the rest of the text / the link here. */
+    val notes: String = "",
 )
 
 /** What completing a task did, so it can be undone exactly. */
@@ -50,6 +52,7 @@ class TaskRepository(
     val tasks: Flow<List<Task>> = dao.observeAll()
     val lists: Flow<List<TaskList>> = org?.observeLists() ?: flowOf(TaskList.Defaults)
     val subtasks: Flow<List<Subtask>> = org?.observeSubtasks() ?: flowOf(emptyList())
+    val views: Flow<List<SavedView>> = org?.observeViews() ?: flowOf(emptyList())
     val templates: Flow<List<Template>> = org?.observeTemplates()?.map { l -> l.map(TemplateCodec::toTemplate) } ?: emptyFlow()
 
     suspend fun add(title: String, dueDay: Long? = null): Long = add(NewTask(title, dueDay))
@@ -74,6 +77,7 @@ class TaskRepository(
         val id = dao.insert(
             Task(
                 title = clean,
+                notes = new.notes.trim(),
                 createdAt = now,
                 dueDay = new.dueDay,
                 dueMinute = new.dueMinute?.takeIf { new.dueDay != null },
@@ -210,6 +214,17 @@ class TaskRepository(
             org?.deleteList(id)
         }
     }
+
+    // ---- saved views (v0.8) ----
+    suspend fun saveView(name: String, query: String, filter: String): Long? {
+        val o = org ?: return null
+        val n = name.trim().ifEmpty { return null }
+        return o.insertView(SavedView(name = n.take(40), query = query.trim(), filter = filter, position = o.maxViewPosition() + 1))
+    }
+    suspend fun deleteView(id: Long) { org?.deleteView(id) }
+
+    /** v0.8 planning: one task's new day (time of day kept), or completion. */
+    suspend fun setDueKeepTime(id: Long, day: Long) = dao.setDueKeepTime(id, day)
 
     // ---- templates ----
     suspend fun addTemplate(name: String, items: List<TemplateItem>): Long? {

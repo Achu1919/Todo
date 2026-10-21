@@ -47,6 +47,8 @@ class MigrationTest {
                         for (i in 0 until entities.length()) {
                             val e = entities.getJSONObject(i)
                             db.execSQL(e.getString("createSql").replace("\${TABLE_NAME}", e.getString("tableName")))
+                            val idx = e.optJSONArray("indices")
+                            if (idx != null) for (j in 0 until idx.length()) db.execSQL(idx.getJSONObject(j).getString("createSql").replace("\${TABLE_NAME}", e.getString("tableName")))
                         }
                         for (i in 0 until setup.length()) db.execSQL(setup.getString(i))
                     }
@@ -132,6 +134,50 @@ class MigrationTest {
         assertEquals(listOf("Build", "Notes"), org.subtasksOf(id).map { it.title })
         val listId = repo.createList("Home", 3, "🏠", ListArea.Personal)!!
         assertEquals(3L, listId)
+        db.close()
+    }
+
+    /**
+     * v0.7.4 (schema 4) → v0.8 (schema 5): only a new saved_views table. Tasks, lists, subtasks
+     * and templates are kept exactly (incl. user lists, tags, order, subtasks).
+     */
+    @Test fun migrate4To5KeepsEverythingAndAddsSavedViews() = runBlocking {
+        createFromSchema(4) {
+            execSQL("INSERT INTO lists (id, name, color, emoji, position, area) VALUES (1, 'Personal', 2, NULL, 0, 0), (2, 'Work', 0, NULL, 1, 1), (5, 'Home', 3, '🏠', 2, 0)")
+            execSQL("INSERT INTO templates (id, name, body, position) VALUES (1, 'Weekly review', '[]', 0)")
+            execSQL("INSERT INTO tasks (id, title, notes, done, created_at, completed_at, due_day, priority, due_minute, repeat_rule, list_id, tags, sort_order) VALUES (3, 'Pay rent', 'HDFC', 0, 100, NULL, 20385, 2, 600, 'M:1', 5, 'bills home', 7)")
+            execSQL("INSERT INTO tasks (id, title, notes, done, created_at, completed_at, due_day, priority, due_minute, repeat_rule, list_id, tags, sort_order) VALUES (8, 'Gym', '', 1, 200, 300, NULL, 0, NULL, NULL, 1, '', 200)")
+            execSQL("INSERT INTO subtasks (id, task_id, title, done, position) VALUES (1, 3, 'Transfer', 1, 0)")
+        }
+        val db = TodoDatabase.build(ctx)
+        val rows = db.taskDao().observeAll().first()
+        assertEquals(
+            listOf(
+                Task(id = 3, title = "Pay rent", notes = "HDFC", createdAt = 100, dueDay = 20385, priorityCode = 2, dueMinute = 600, repeatRule = "M:1", listId = 5, tags = "bills home", sortOrder = 7),
+                Task(id = 8, title = "Gym", done = true, createdAt = 200, completedAt = 300, listId = 1, sortOrder = 200),
+            ),
+            rows,
+        )
+        val org = db.orgDao()
+        assertEquals(listOf("Personal", "Work", "Home"), org.lists().map { it.name })
+        assertEquals("🏠", org.lists()[2].emoji)
+        assertEquals(listOf("Transfer"), org.subtasksOf(3).map { it.title })
+        assertEquals(listOf("Weekly review"), org.observeTemplates().first().map { it.name })
+        // The new table works.
+        val repo = TaskRepository(db)
+        val v = repo.saveView("Bills this week", "rent", "tag=bills;due=ThisWeek")!!
+        assertEquals(listOf(SavedView(v, "Bills this week", "rent", "tag=bills;due=ThisWeek", 0)), org.observeViews().first())
+        assertEquals(9L, repo.add(NewTask("Shared link", notes = "https://example.com")))
+        assertEquals("https://example.com", db.taskDao().get(9)!!.notes)
+        db.close()
+    }
+
+    /** The oldest shipped schema still reaches 5 through every step. */
+    @Test fun migrate2To5() = runBlocking {
+        createV2 { execSQL("INSERT INTO tasks (id, title, notes, done, created_at, completed_at, due_day, priority) VALUES (1, 'Pay rent', 'HDFC', 0, 100, NULL, 20385, 2)") }
+        val db = TodoDatabase.build(ctx)
+        assertEquals(listOf("Pay rent"), db.taskDao().observeAll().first().map { it.title })
+        assertEquals(emptyList<SavedView>(), db.orgDao().observeViews().first())
         db.close()
     }
 }

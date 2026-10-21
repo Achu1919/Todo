@@ -72,8 +72,35 @@ data class TemplateEntity(
     @ColumnInfo(defaultValue = "0") val position: Int = 0,
 )
 
+/**
+ * v0.8 saved search view: a name, the search text and a [dev.saikrishna.todo.domain.ViewFilter]
+ * encoded with [dev.saikrishna.todo.domain.ViewFilter.encode].
+ */
+@Immutable
+@Entity(tableName = "saved_views")
+data class SavedView(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    @ColumnInfo(defaultValue = "") val query: String = "",
+    @ColumnInfo(defaultValue = "") val filter: String = "",
+    @ColumnInfo(defaultValue = "0") val position: Int = 0,
+)
+
 @Dao
 interface OrgDao {
+    // ---- saved views (v0.8) ----
+    @Query("SELECT * FROM saved_views ORDER BY position ASC, id ASC")
+    fun observeViews(): Flow<List<SavedView>>
+
+    @Query("SELECT COALESCE(MAX(position), -1) FROM saved_views")
+    suspend fun maxViewPosition(): Int
+
+    @Insert
+    suspend fun insertView(v: SavedView): Long
+
+    @Query("DELETE FROM saved_views WHERE id = :id")
+    suspend fun deleteView(id: Long)
+
     // ---- lists ----
     @Query("SELECT * FROM lists ORDER BY position ASC, id ASC")
     fun observeLists(): Flow<List<TaskList>>
