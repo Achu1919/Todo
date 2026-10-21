@@ -574,6 +574,59 @@ Sai (light mode, on the phone): rows scrolling behind the composer were clearly 
 
   `ComposerCollapseTest` was updated: the scroll now ends editing, and a draft keeps the bar expanded.
 
+## Milestone 8 (v0.8.0, code 14): quick capture and planning (batch 3)
+
+Local git: one commit per step (`git log`): baseline 0.7.4, domain + schema 5, UI (search, plan, capture, tile), widget, tests + polish.
+
+### Data (Room schema 5, `MIGRATION_4_5`, data preserved)
+- New `saved_views` table (`id, name, query, filter, position`). The filter is stored as `ViewFilter.encode()` (`list=5;prio=1;due=ThisWeek;status=Open;rem=1;rep=1`), and `decode` is lenient.
+- `MigrationTest`: 4 → 5 and 2 → 5 keep every row. The test helper now also creates schema indices.
+- Settings (DataStore): `plan_enabled` (default off) and `plan_minute` (default 480 = 8:00 AM).
+
+### Share-sheet capture (`ui/capture/CaptureActivity.kt`, `CaptureScreen.kt`, `domain/ShareCapture.kt`)
+- **Window:** `Theme.Todo.Capture` is translucent, with no window animation. The activity has its own `taskAffinity` and `excludeFromRecents`, so the full app never launches.
+- **Backdrop:** cross-window blur (20 dp) when the device allows it, otherwise our scrim (0.34).
+- **Card:** a bottom glass card with the title (NL parse chips, as in the composer), notes, a list chip row and Cancel/Save. It rises on Glide; reduced motion uses fades.
+- **Parsing:**
+  - A subject becomes the title. Otherwise the first line is the title and the rest goes to notes.
+  - URLs move to notes. A link-only share gets the title "Read <host>".
+  - Titles over 120 characters are cut at a word boundary with the full line kept in notes.
+- **Save:** shows "Added to Today / Added for <date>" with a check pop for 650 ms, then fades out.
+
+### Quick Settings tile (`AddTaskTileService`)
+- Opens the same card, empty, with the keyboard up (`stateVisible`).
+- API 34+ uses `startActivityAndCollapse(PendingIntent)`; API 33 uses the Intent overload. When locked it calls `unlockAndRun`.
+
+### Home-screen widget (`widget/TodayWidget.kt`, `WidgetData.kt`, Glance 1.2.0)
+- **Content:** the Today page's open tasks (due today, overdue, undated) in manual order, at most 6, then "+N more". Overdue rows are marked red; timed rows show their time.
+- **Actions:**
+  - The ring completes the task through `CompleteTaskAction` (repository `setDone`, so repeats and subtasks work).
+  - A row opens the app at that task's panel (`EXTRA_OPEN_TASK`).
+  - "+" opens the capture card.
+- **Refresh:** `TodoApp` maps `tasks` → `WidgetData`, applies `distinctUntilChanged` and calls `updateAll` only when a widget is placed. `updatePeriodMillis` is 30 min, which also rolls the day over.
+- **Styling:** day/night colours from our ink and accent tokens. Rounded 24 dp shape drawable plus `cornerRadius`. Picker preview is `@layout/widget_today_preview` (static, sample tasks).
+
+### Morning planning (`domain/Planner.kt`, `ui/plan/PlanScreen.kt`, `reminders/PlanReminder.kt`)
+- **Reminder:** an inexact daily alarm (`setAndAllowWhileIdle`, so no exact-alarm permission). It is re-armed after each fire, on setting change, on boot and on clock change. The notification reads "2 overdue · 3 due today" and opens the plan screen.
+- **Queue:** overdue (oldest first), then due today (timed first), then up to 3 suggestions (2 from the next 7 days, then the oldest undated).
+- **Card stack:** depth scale 1−0.05·d and 14 dp lift on Glide. Swipe right = today, left = tomorrow (threshold 0.28 width, rotation 7°·dx). Buttons for Today, Tomorrow, Pick date, Done, and Skip.
+- **Motion fix found by the filmstrip:** the exit fling now awaits its own axis and releases once off-screen (~190 ms). Before, a horizontal exit was cut short at once. Cards have an opaque base so the stack never shows through.
+- **Summary:** "4 for today · 1 moved · 1 done".
+- **Entry points:** Settings → Planning, and the list menu row "Plan your day".
+
+### Search filters and saved views (`domain/ViewFilter.kt`, `ui/search/SearchScreen.kt`)
+- **Chips:** Open/Done, Overdue/Today/This week/No date, High/Low, Reminder, Recurring, plus list/tag chips. They combine with the text.
+- **Saved views:** "Save view" names and stores the set. Saved views sit in Search's top row and in the list menu; tapping the active one clears it, and "Delete view" removes it.
+
+### Numbers
+- Plan card flight in the frame test is monotonic and off-screen by frame 12 (16 ms frames). The next card is live by about 0.2 s.
+- Release APK is +0.99 MB (Glance).
+
+### Risks
+- The widget render test uses `GlanceRemoteViews` in Robolectric. Launcher hosts can differ.
+- Inexact alarm: the planning nudge can arrive a few minutes late in Doze.
+- Cross-window blur depends on the device and battery saver; the fallback is the scrim.
+
 ## Tests
 - `org/QuickParseOrgTest` (10)
 - `FocusTest` (7, IST, edge minutes, overnight, manual until boundary)
@@ -598,7 +651,7 @@ Sai (light mode, on the phone): rows scrolling behind the composer were clearly 
 
 ## Tests
 
-`./gradlew testDebugUnitTest`: **160 tests, all pass** (v0.7.4: +`ComposerTouchTest` 4; v0.7.3: +`CollapseMachineTest` 8, +`ComposerCollapseTest` 4; v0.7.2: +`BottomFadeTest` 3; v0.7.1: +`ListPillMorphTest` 2; v0.7: +`QuickParseOrgTest` 10, +`FocusTest` 7, +`ReorderTest` 7, +`TemplatesTest` 6, +`OrgRepositoryTest` 9, +`MigrationTest` 1 (3 → 4), +`NotificationOpenTest` 4; v0.6.2: +`HeaderEdgeTest` 3; v0.6.1: +`TransitionTest` 6; v0.6: +`QuickParseTest` 21, +`RepeatRuleTest` 12, +`SnoozeTest` 6, +`ComposerTest` 2 (chips appear, submit carries the parse, tapping a chip keeps the words), +`MigrationTest` 1 (v2 → v3 preserves data), +`RepeatRepositoryTest` 2; v0.5: +`PillFirstFrameTest` 1, +`TaskPanelTest` 3). `-Pshots --tests '*ScreenshotTest*'`: **34** screenshot tests (v0.7.3: +`ComposerPillScreenshotTest` 2) (v0.7.2: +3 `ComposerFrostScreenshotTest`; v0.7.1: +4 pill shots; v0.7: +12 in `OrgScreenshotTest`), all pass. `SectionsTest` was replaced by:
+`./gradlew testDebugUnitTest`: **185 tests, all pass** (v0.8: +`ShareCaptureTest` 9, +`ViewFilterTest` 4, +`PlannerTest` 3, +`MigrationTest` 2 (4 → 5, 2 → 5), +`WidgetDataTest` 3, +`PlanReminderTest` 1, +`CaptureIntentTest` 3; v0.7.4: +`ComposerTouchTest` 4; v0.7.3: +`CollapseMachineTest` 8, +`ComposerCollapseTest` 4; v0.7.2: +`BottomFadeTest` 3; v0.7.1: +`ListPillMorphTest` 2; v0.7: +`QuickParseOrgTest` 10, +`FocusTest` 7, +`ReorderTest` 7, +`TemplatesTest` 6, +`OrgRepositoryTest` 9, +`MigrationTest` 1 (3 → 4), +`NotificationOpenTest` 4; v0.6.2: +`HeaderEdgeTest` 3; v0.6.1: +`TransitionTest` 6; v0.6: +`QuickParseTest` 21, +`RepeatRuleTest` 12, +`SnoozeTest` 6, +`ComposerTest` 2 (chips appear, submit carries the parse, tapping a chip keeps the words), +`MigrationTest` 1 (v2 → v3 preserves data), +`RepeatRepositoryTest` 2; v0.5: +`PillFirstFrameTest` 1, +`TaskPanelTest` 3). `-Pshots --tests '*ScreenshotTest*'`: **44** screenshot tests (v0.8: +10 in `V08ScreenshotTest`: capture light/dark + open filmstrip + save/confirm, plan light/dark + keep filmstrip + summary, search filters light/dark, widget + preview light/dark) (v0.7.3: +`ComposerPillScreenshotTest` 2) (v0.7.2: +3 `ComposerFrostScreenshotTest`; v0.7.1: +4 pill shots; v0.7: +12 in `OrgScreenshotTest`), all pass. `SectionsTest` was replaced by:
 - `PagesTest` (11): Today/Upcoming/Done classification; Today = open today/overdue/undated in creation order with "Overdue · Yesterday"; Upcoming grouped by day with headers (Tomorrow / Friday / Wed, 28 Oct) and no repeated date; Done grouped by completion day newest first with Clear done count; empty states and All clear count; leaving rows stay on their page (dwell vs collapsing, reopen from Done); day labels (Locale.UK); row meta; overrides + hidden deletes; due chips (next week = next Monday); entrance tracker baseline + forget.
 - `SettingsTest` (4): defaults when nothing stored, stored values, unknown theme → System, `ThemeMode.isDark`.
 - `SearchTest` (3): blank query, title+notes case-insensitive match with open-first order, no match.
@@ -620,7 +673,7 @@ Milestone 1 tests:
 7. Header is glass with title + search/settings + filter pill; the open-task count digit slide was dropped with the old header. Launch entrance §6.1 not done (step 9). §6.8 inline expand skipped; v0.5 replaces the sheet with the contextual floating panel (6.7-style).
 8. In-app reduce motion / haptics / theme are real settings (DataStore). Theme changes switch instantly (no animated palette crossfade).
 9. `Settings.System.HAPTIC_FEEDBACK_ENABLED` is deprecated in SDK 37 but is still read (suppressed) as the spec asks.
-10. Debug APK (milestone 2 build) is about 31 MB because it is unminified. **Release APK (v0.7.4 / code 13): 4,655,871 bytes (about 4.6 MB), apksigner verify OK, aapt2 badging versionCode 11 / versionName 0.7.2.** v0.7.1 / code 10: 4,639,487 bytes. v0.7.0 / code 9: 4,623,103 bytes. v0.6.2 / code 8: 4,442,879 bytes. v0.6.1 / code 7: 4,442,879 bytes (Navigation 3 removed). v0.6.0 / code 6: 4,476,032 bytes. v0.5.0 / code 5: 4,301,408 bytes (about 4.3 MB). Milestone 4 (v0.4.0 / code 4): 4,285,024 bytes (about 4.3 MB; +0.9 MB for the two Newsreader variable fonts, minus Instrument Serif). Milestone 3 was 3,769,333 bytes, with R8, resource shrinking, baseline profile, debug-key signing (apksigner verify OK, V2).
+10. Debug APK (milestone 2 build) is about 31 MB because it is unminified. **Release APK (v0.8.0 / code 14): 5,647,619 bytes (about 5.6 MB), apksigner verify OK (V2, Android Debug), aapt2 badging versionCode 14 / versionName 0.8.0.** v0.7.4 / code 13: 4,655,871 bytes. v0.7.1 / code 10: 4,639,487 bytes. v0.7.0 / code 9: 4,623,103 bytes. v0.6.2 / code 8: 4,442,879 bytes. v0.6.1 / code 7: 4,442,879 bytes (Navigation 3 removed). v0.6.0 / code 6: 4,476,032 bytes. v0.5.0 / code 5: 4,301,408 bytes (about 4.3 MB). Milestone 4 (v0.4.0 / code 4): 4,285,024 bytes (about 4.3 MB; +0.9 MB for the two Newsreader variable fonts, minus Instrument Serif). Milestone 3 was 3,769,333 bytes, with R8, resource shrinking, baseline profile, debug-key signing (apksigner verify OK, V2).
 11. Auto-scroll for a new row that is fully off-screen uses `animateScrollToItem(index)`, which lands it at the top of the viewport unless it is the last list item. The common case (a partly hidden row) scrolls by the overflow on Smooth.
 12. Swipe-to-delete fling velocity threshold is M3's internal default (not configurable in 1.4.0); only the 35 % positional threshold is set. Swipe is end→start only.
 13. "Next week" chip = next Monday. Search results are not grouped by page. Licences screen lists libraries by name + licence (only the font OFL texts are bundled).
