@@ -34,7 +34,13 @@ fun AppTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable ()
         LocalAppColors provides colors,
         LocalAppTypography provides DefaultTypography,
     ) {
-        MaterialTheme(colorScheme = m3, content = content)
+        MaterialTheme(colorScheme = m3) {
+            // v0.9.1: no Material ripple anywhere; our soft in-bounds press tint instead.
+            CompositionLocalProvider(
+                androidx.compose.foundation.LocalIndication provides dev.saikrishna.todo.ui.components.SoftPress(colors.ink),
+                content = content,
+            )
+        }
     }
 }
 

@@ -1,5 +1,6 @@
 package dev.saikrishna.todo.ui.home
 
+import dev.saikrishna.todo.ui.components.pressScale
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -8,6 +9,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -87,10 +92,38 @@ fun CheckCircle(
     val checkSeg = remember { Path() }
     val measure = remember { PathMeasure() }
 
+    // v0.9.1: no ripple (Material's grey wave spilled ~2x past the ring). Press feedback stays
+    // inside the ring: the mark scales to 0.9 on a spring while pressed (layer only).
+    val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    // A press held past the long-press timeout lifts the row for dragging (the row's own gesture);
+    // its release must not also tick the box (v0.9.1 fix: it used to complete the task).
+    val longPressMs = androidx.compose.ui.platform.LocalViewConfiguration.current.longPressTimeoutMillis
+    // Pointer times (down → up) seen in the Initial pass, without consuming anything.
+    val times = remember { longArrayOf(-1L, -1L) }
+    val guarded: (Boolean) -> Unit = { v ->
+        val (down, up) = times[0] to times[1]
+        times[0] = -1L
+        if (down < 0 || up - down < longPressMs) onCheckedChange(v)
+    }
     Canvas(
         modifier
             .size(48.dp)
-            .toggleable(value = checked, enabled = enabled, role = Role.Checkbox, onValueChange = onCheckedChange)
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    times[0] = down.uptimeMillis; times[1] = down.uptimeMillis
+                    while (true) {
+                        val e = awaitPointerEvent(PointerEventPass.Initial)
+                        times[1] = e.changes.firstOrNull()?.uptimeMillis ?: times[1]
+                        if (e.changes.none { it.pressed }) break
+                    }
+                }
+            }
+            .toggleable(
+                value = checked, enabled = enabled, role = Role.Checkbox, onValueChange = guarded,
+                interactionSource = press, indication = null,
+            )
+            .pressScale(press, 0.9f)
             .semantics {
                 contentDescription = label
                 stateDescription = if (checked) "Completed" else "Not completed"

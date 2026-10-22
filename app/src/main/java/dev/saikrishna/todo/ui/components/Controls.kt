@@ -64,12 +64,18 @@ fun CircleIconButton(
     glass: Boolean = false,
 ) {
     val c = AppTheme.colors
+    // v0.9.1: circular in-bounds tint (SoftPress) + 0.94 scale spring; no square ripple.
+    val press = androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     Box(
         modifier
             .size(PillSpec.Control)
+            .pressScale(press, 0.94f)
             .then(if (glass) Modifier.glassControl(Shapes.full) else Modifier)
             .clip(Shapes.full)
-            .clickable(role = Role.Button, onClickLabel = description, onClick = onClick),
+            .clickable(
+                interactionSource = press, indication = androidx.compose.foundation.LocalIndication.current,
+                role = Role.Button, onClickLabel = description, onClick = onClick,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Icon(

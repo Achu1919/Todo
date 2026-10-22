@@ -36,6 +36,7 @@ import dev.saikrishna.todo.ui.components.SegmentedPill
 import dev.saikrishna.todo.ui.components.glassChrome
 import dev.saikrishna.todo.ui.components.glassRim
 import dev.saikrishna.todo.ui.components.glassShadow
+import dev.saikrishna.todo.ui.components.pressScale
 import dev.saikrishna.todo.ui.icons.AppIcons
 import dev.saikrishna.todo.ui.motion.LocalHaptics
 import dev.saikrishna.todo.ui.theme.AppTheme
@@ -57,16 +58,18 @@ fun listsButtonLabel(state: ListChipState): String =
 @Composable
 fun ListsButton(state: ListChipState, onClick: () -> Unit, modifier: Modifier = Modifier, anchor: Modifier = Modifier) {
     val c = AppTheme.colors
+    val press = androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     Box(
         modifier
             .then(anchor)
             .size(ListsButtonSize)
+            .pressScale(press, 0.94f)
             .testTag("lists-button")
             .glassShadow(CircleShape, GlassLevel.Mid, c.glassShadow)
             .clip(CircleShape)
             .glassChrome()
             .glassRim(CircleShape, c.glassRimTop, c.glassRimBottom)
-            .clickable(role = Role.Button, onClickLabel = "Open lists", onClick = onClick)
+            .clickable(press, androidx.compose.foundation.LocalIndication.current, role = Role.Button, onClickLabel = "Open lists", onClick = onClick)
             .semantics { contentDescription = listsButtonLabel(state) },
         contentAlignment = Alignment.Center,
     ) { ListsButtonContent(state) }

@@ -1,5 +1,6 @@
 package dev.saikrishna.todo.ui.home
 
+import dev.saikrishna.todo.ui.components.pressScale
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -77,14 +78,21 @@ fun TaskRow(
         if (checked) c.inkTertiary else c.ink, Tweens.select(), label = "title colour",
     )
 
+    // v0.9.1: row-body press = a gentle 0.98 scale spring + the faint in-card tint (SoftPress,
+    // clipped to the card shape), never Material's grey ripple.
+    val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     Row(
         modifier
             .fillMaxWidth()
+            .pressScale(press, 0.98f)
             // Shared glass tokens, no live blur on cards: translucent fill + gradient rim + soft shadow.
             .glassSurface(Shapes.row, GlassLevel.Low, c.glassCard)
             .clip(Shapes.row)
             .then(
-                if (onClick != null) Modifier.clickable(enabled = enabled, role = Role.Button, onClickLabel = "Open details", onClick = onClick)
+                if (onClick != null) Modifier.clickable(
+                    interactionSource = press, indication = androidx.compose.foundation.LocalIndication.current,
+                    enabled = enabled, role = Role.Button, onClickLabel = "Open details", onClick = onClick,
+                )
                 else Modifier,
             )
             // 4 dp start + the checkbox's 12 dp inner padding = the 16 dp row inset.
