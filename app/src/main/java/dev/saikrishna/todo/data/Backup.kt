@@ -141,7 +141,8 @@ object BackupCodec {
     private fun positive(id: Long) { if (id <= 0) throw BackupException("This backup is damaged (bad id).") }
     /** A missing section reads as empty (sections may be added in later schemas). */
     private fun objects(o: JSONObject, key: String): List<JSONObject> {
-        val a = o.optJSONArray(key) ?: return emptyList()
+        if (!o.has(key) || o.isNull(key)) return emptyList()
+        val a = o.optJSONArray(key) ?: throw BackupException("This backup is damaged and can't be read.")
         return (0 until a.length()).map { a.getJSONObject(it) }
     }
     private fun JSONObject.optStringOrNull(k: String): String? = if (isNull(k) || !has(k)) null else optString(k)
@@ -182,6 +183,8 @@ class BackupManager(
     private val afterImport: suspend (before: List<Task>, after: List<Task>) -> Unit = { _, _ -> },
 ) {
     private val dao get() = db.backupDao()
+    /** Tests: throws inside the import transaction (after the first writes) to prove the rollback. */
+    internal var faultForTest: (() -> Unit)? = null
 
     suspend fun snapshot(): Backup = db.withTransaction {
         Backup(BackupCodec.Schema, clock(), appVersion, dao.tasks(), dao.subtasks(), dao.lists(), dao.templates(), dao.views(), null)
@@ -202,6 +205,7 @@ class BackupManager(
     private suspend fun replace(b: Backup): Result {
         dao.clearSubtasks(); dao.clearTasks(); dao.clearLists(); dao.clearTemplates(); dao.clearViews()
         dao.putLists(b.lists)
+        faultForTest?.invoke()
         // The built-in lists always exist (the app assumes them).
         db.orgDao().insertListsIfMissing(TaskList.Defaults)
         val listIds = dao.lists().map { it.id }.toSet()
@@ -238,6 +242,7 @@ class BackupManager(
             }
         }
         fun listOf(id: Long) = listMap[id] ?: id.takeIf { localLists.containsKey(it) } ?: TaskList.PERSONAL
+        faultForTest?.invoke()
         // Tasks.
         val localTasks = dao.tasks().associateBy { it.id }
         val taskMap = HashMap<Long, Long>()

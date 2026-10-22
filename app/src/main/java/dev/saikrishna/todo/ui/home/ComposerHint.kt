@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.text
 import androidx.compose.ui.text.AnnotatedString
@@ -52,6 +53,9 @@ object ComposerHints {
     val Travel = 12.dp
 }
 
+/** Which phrase is showing (tests only; accessibility services ignore custom keys). */
+val HintIndexKey = SemanticsPropertyKey<Int>("HintIndex")
+
 /**
  * The placeholder text. Cycles only while [active] (empty, unfocused, expanded, app visible);
  * pausing keeps the current phrase. TalkBack always reads the static "Add a task".
@@ -72,7 +76,10 @@ fun RotatingHint(active: Boolean, style: TextStyle, color: Color, modifier: Modi
         targetState = index,
         modifier = modifier
             .testTag("composer-hint")
-            .clearAndSetSemantics { text = AnnotatedString(ComposerHints.Default) },
+            .clearAndSetSemantics {
+                text = AnnotatedString(ComposerHints.Default)
+                this[HintIndexKey] = index
+            },
         contentAlignment = Alignment.CenterStart,
         transitionSpec = {
             if (reduced) {

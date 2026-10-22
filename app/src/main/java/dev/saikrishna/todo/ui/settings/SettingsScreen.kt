@@ -23,6 +23,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.foundation.layout.Box
+import dev.saikrishna.todo.data.ImportMode
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -69,6 +73,13 @@ fun SettingsScreen(
         runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "?"
     }
 
+    // v0.10 Data section: import sheet state + the last export status line.
+    var importStep by remember { mutableStateOf<ImportStep?>(null) }
+    var dataStatus by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val backup = (context.applicationContext as? dev.saikrishna.todo.TodoApp)?.backup
+
+    Box(Modifier.fillMaxSize()) {
     ScreenScaffold(title = "Settings", onBack = onBack) {
         GroupLabel("Motion")
         Card {
@@ -162,6 +173,9 @@ fun SettingsScreen(
             )
         }
 
+        GroupLabel("Data")
+        DataCard(onStep = { importStep = it }, status = dataStatus, onStatus = { dataStatus = it })
+
         GroupLabel("About")
         Card {
             Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -180,6 +194,14 @@ fun SettingsScreen(
                 Icon(AppIcons.ChevronRight, null, tint = c.inkTertiary, modifier = Modifier.size(18.dp))
             }
         }
+    }
+    ImportSheet(
+        step = importStep,
+        onMerge = { b -> if (backup != null) scope.launch { runImport(backup, b, ImportMode.Merge) { importStep = it } } },
+        onReplace = { b, current -> importStep = ImportStep.ConfirmReplace(b, current) },
+        onConfirmReplace = { b -> if (backup != null) scope.launch { runImport(backup, b, ImportMode.Replace) { importStep = it } } },
+        onDismiss = { if (importStep != ImportStep.Working) importStep = null },
+    )
     }
 }
 
