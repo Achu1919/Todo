@@ -5,6 +5,13 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+/**
+ * v0.10: the app's display name, in ONE place. Everything user-visible that names the app
+ * (launcher label, share target "Add to …", widget picker text, backup file text) is generated
+ * from it below, so a rename is this one line + a rebuild.
+ */
+val appName = "Todo"
+
 android {
     namespace = "dev.saikrishna.todo"
     compileSdk = 37
@@ -13,8 +20,15 @@ android {
         applicationId = "dev.saikrishna.todo"
         minSdk = 33
         targetSdk = 37
-        versionCode = 17
-        versionName = "0.9.1"
+        versionCode = 18
+        versionName = "0.10.0"
+
+        resValue("string", "app_name", appName)
+        resValue("string", "capture_label", "Add to $appName")
+        resValue("string", "tile_add_task", "Add to $appName")
+        resValue("string", "widget_error", "Couldn\\'t load your tasks. Open $appName, then remove and re-add the widget if this stays.")
+        resValue("string", "widget_load_failed", "Couldn\\'t load tasks · tap to open $appName")
+        buildConfigField("String", "APP_NAME", "\"$appName\"")
     }
 
     buildTypes {
@@ -31,7 +45,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+        resValues = true
+    }
 
     testOptions {
         unitTests.isReturnDefaultValues = true

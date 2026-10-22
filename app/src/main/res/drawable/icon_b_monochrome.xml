@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v0.10 icon B, themed: rounded tile outline + bold check. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:strokeColor="#FF000000" android:strokeWidth="3"
+        android:pathData="M45,32h18a13,13 0,0 1,13 13v18a13,13 0,0 1,-13 13h-18a13,13 0,0 1,-13 -13v-18a13,13 0,0 1,13 -13z" />
+    <path android:strokeColor="#FF000000" android:strokeWidth="6.4"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M43.6,54.6 L51,61.8 L64.8,47.2" />
+</vector>

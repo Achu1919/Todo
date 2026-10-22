@@ -15,6 +15,8 @@ import dev.saikrishna.todo.domain.Templates
 abstract class TodoDatabase : RoomDatabase() {
     abstract fun taskDao(): TaskDao
     abstract fun orgDao(): OrgDao
+    /** v0.10 backup/restore (no schema change). */
+    abstract fun backupDao(): BackupDao
 
     companion object {
         /**

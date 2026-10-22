@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -26,6 +27,9 @@ import androidx.compose.ui.semantics.Role
 import dev.saikrishna.todo.data.Task
 import dev.saikrishna.todo.ui.components.liftShadow
 import dev.saikrishna.todo.ui.motion.Depth
+import dev.saikrishna.todo.ui.motion.LaunchEntrance
+import dev.saikrishna.todo.ui.motion.LocalLaunchEntrance
+import dev.saikrishna.todo.ui.motion.launchEntrance
 import dev.saikrishna.todo.ui.motion.LocalHaptics
 import dev.saikrishna.todo.ui.motion.LocalReducedMotion
 import dev.saikrishna.todo.ui.motion.Springs
@@ -108,14 +112,19 @@ fun TaskListPage(
     }
     val canDrag = actions.onDrop != null && page != Filter.Done
 
+    val launch = LocalLaunchEntrance.current
     LazyColumn(state = listState, modifier = modifier.fillMaxSize(), contentPadding = contentPadding) {
         // Serif page heading (index 0), then the page items.
         item(key = "heading", contentType = "heading") {
-            PageHeading(heading, caption, extra = headingExtra)
+            // v0.10 cold-start entrance: the heading is row 0, page items follow (draw phase only).
+            Box(Modifier.launchEntrance(launch, LaunchEntrance.Slot.Row(0))) {
+                PageHeading(heading, caption, extra = headingExtra)
+            }
         }
-        items(shown, key = { it.key }, contentType = { it.contentType }) { item ->
+        itemsIndexed(shown, key = { _, it -> it.key }, contentType = { _, it -> it.contentType }) { index, item ->
+            val rise = Modifier.launchEntrance(launch, LaunchEntrance.Slot.Row(index + 1))
             if (canDrag && reorderable(page, item)) {
-                ReorderableItem(reorder, key = item.key, animateItemModifier = placedSpec()) { isDragging ->
+                ReorderableItem(reorder, key = item.key, animateItemModifier = placedSpec(rise)) { isDragging ->
                     when (item) {
                         is ListItem.Row -> {
                             val handle = Modifier.longPressDraggableHandle(
@@ -144,11 +153,11 @@ fun TaskListPage(
                 }
             } else {
                 when (item) {
-                    is ListItem.Row -> TaskListRow(item, page, leave, item.task.id in deleting, tracker, actions, Modifier, false, placedSpec())
-                    is ListItem.DayHeader -> DayHeaderRow(item.label, placedSpec())
-                    is ListItem.AllClear -> AllClear(item.doneToday, placedSpec())
-                    is ListItem.Empty -> EmptyMessage(item.title, item.body, placedSpec())
-                    is ListItem.ClearDone -> ClearDoneRow(item.count, actions.onClearDone, placedSpec())
+                    is ListItem.Row -> TaskListRow(item, page, leave, item.task.id in deleting, tracker, actions, Modifier, false, placedSpec(rise))
+                    is ListItem.DayHeader -> DayHeaderRow(item.label, placedSpec(rise))
+                    is ListItem.AllClear -> AllClear(item.doneToday, placedSpec(rise))
+                    is ListItem.Empty -> EmptyMessage(item.title, item.body, placedSpec(rise))
+                    is ListItem.ClearDone -> ClearDoneRow(item.count, actions.onClearDone, placedSpec(rise))
                 }
             }
         }
@@ -157,11 +166,11 @@ fun TaskListPage(
 
 private fun rowKeys(items: List<ListItem>): List<String> = items.filterIsInstance<ListItem.Row>().map { it.key }
 
-private fun LazyItemScope.placedSpec(): Modifier = Modifier.animateItem(
+private fun LazyItemScope.placedSpec(then: Modifier = Modifier): Modifier = Modifier.animateItem(
     fadeInSpec = Tweens.fadeIn(0),
     placementSpec = Springs.Snappy.intOffset,
     fadeOutSpec = Tweens.fadeOut(),
-)
+).then(then)
 
 @Composable
 private fun TaskListRow(

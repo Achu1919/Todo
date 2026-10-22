@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v0.10: window background ≈ the Compose sky backdrop, so nothing flashes before the first frame. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape>
+            <gradient android:angle="270" android:type="linear"
+                android:startColor="@color/sky_top" android:centerY="0.6"
+                android:centerColor="@color/sky_low" android:endColor="@color/sky_deep" />
+        </shape>
+    </item>
+</layer-list>

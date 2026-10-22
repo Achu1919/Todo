@@ -66,6 +66,13 @@ object Reminders {
         else am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
     }
 
+    /** v0.10 after an import: re-arm every task now in the DB, cancel tasks that are gone. */
+    fun rearm(context: Context, before: List<Task>, after: List<Task>, now: Long, zone: ZoneId) {
+        val ids = after.mapTo(HashSet()) { it.id }
+        for (t in before) if (t.id !in ids) cancel(context, t.id)
+        for (t in after) sync(context, t, now, zone)
+    }
+
     fun cancel(context: Context, id: Long) {
         context.getSystemService(AlarmManager::class.java)?.cancel(intent(context, ACTION_FIRE, id))
     }

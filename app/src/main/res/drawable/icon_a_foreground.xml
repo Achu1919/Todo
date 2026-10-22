@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v0.10 icon A: a filled soft-white check disc (our checkbox), indigo check. Safe zone r33. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Contact shadow -->
+    <path android:fillColor="#1F1A2350"
+        android:pathData="M54,32.5a24,24 0,1 1,0 48a24,24 0,1 1,0 -48z" />
+    <path android:pathData="M54,30a24,24 0,1 1,0 48a24,24 0,1 1,0 -48z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear"
+                android:startX="54" android:startY="30" android:endX="54" android:endY="78">
+                <item android:offset="0" android:color="#FFFFFFFF" />
+                <item android:offset="1" android:color="#FFE6ECFA" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:strokeColor="#FF3B4BB0" android:strokeWidth="5.6"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M43.6,54.6 L50.8,61.6 L64.6,47.2" />
+</vector>

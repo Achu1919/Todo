@@ -7,7 +7,7 @@ import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 
 /**
- * v0.8 Quick Settings "Add task" tile: opens the floating capture card with the keyboard up.
+ * v0.8 Quick Settings "Add to <app name>" tile: opens the floating capture card with the keyboard up.
  * API 34+ needs [startActivityAndCollapse] with a PendingIntent; 33 uses the Intent overload.
  * On a locked device it asks to unlock first.
  */
@@ -16,7 +16,7 @@ class AddTaskTileService : TileService() {
         super.onStartListening()
         qsTile?.apply {
             state = Tile.STATE_INACTIVE
-            label = "Add task"
+            label = getString(dev.saikrishna.todo.R.string.tile_add_task)
             if (Build.VERSION.SDK_INT >= 29) subtitle = null
             updateTile()
         }

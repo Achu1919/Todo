@@ -29,6 +29,8 @@ import androidx.compose.ui.platform.LocalFontFamilyResolver
 class MainActivity : ComponentActivity() {
     /** v0.9.1 in-place theme switch (kept across recompositions; not across process death). */
     internal val reveal = ThemeReveal()
+    /** v0.10 cold-start entrance (plays once per process, on a fresh Activity only). */
+    internal lateinit var entrance: dev.saikrishna.todo.ui.motion.LaunchEntrance
 
     private val vm: TodoViewModel by viewModels {
         val app = application as TodoApp
@@ -38,11 +40,18 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
-        // Hold the splash until settings are read, so the first frame has the right theme.
-        splash.setKeepOnScreenCondition { vm.settings.value == null }
+        // Hold the splash until settings and the first tasks are read, so the first frame has
+        // the right theme and the launch entrance has its rows (both reads take a few ms).
+        splash.setKeepOnScreenCondition { vm.settings.value == null || vm.tasks.value == null }
+        // v0.10: the splash sits on the backdrop colour; it hands over with a short fade while the
+        // icon eases up a touch, and the entrance plays underneath.
         splash.setOnExitAnimationListener { provider ->
-            provider.view.animate().alpha(0f).setDuration(150).withEndAction { provider.remove() }.start()
+            provider.iconView.animate().scaleX(1.06f).scaleY(1.06f).setDuration(180).start()
+            provider.view.animate().alpha(0f).setDuration(180).withEndAction { provider.remove() }.start()
         }
+        val app = application as TodoApp
+        entrance = dev.saikrishna.todo.ui.motion.LaunchEntrance(play = savedInstanceState == null && !app.entranceShown)
+        app.entranceShown = true
         enableEdgeToEdge()
         window.isNavigationBarContrastEnforced = false
         if (savedInstanceState == null) handleOpen(intent)
@@ -69,7 +78,9 @@ class MainActivity : ComponentActivity() {
                 ThemeRevealHost(reveal) {
                     AppTheme(darkTheme = dark) {
                         ProvideHaptics(userEnabled = settings.haptics) {
-                            AppNav(vm)
+                            androidx.compose.runtime.CompositionLocalProvider(
+                                dev.saikrishna.todo.ui.motion.LocalLaunchEntrance provides entrance,
+                            ) { AppNav(vm) }
                         }
                     }
                 }

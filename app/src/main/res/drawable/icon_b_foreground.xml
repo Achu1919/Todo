@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v0.10 icon B: a glass tile (translucent fill, light rim, top sheen) holding a soft rounded check. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#24FFFFFF" android:strokeColor="#73FFFFFF" android:strokeWidth="1.2"
+        android:pathData="M45,31h18a14,14 0,0 1,14 14v18a14,14 0,0 1,-14 14h-18a14,14 0,0 1,-14 -14v-18a14,14 0,0 1,14 -14z" />
+    <path android:pathData="M45,32h18a13,13 0,0 1,13 13v3h-44v-3a13,13 0,0 1,13 -13z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear"
+                android:startX="54" android:startY="32" android:endX="54" android:endY="48">
+                <item android:offset="0" android:color="#38FFFFFF" />
+                <item android:offset="1" android:color="#00FFFFFF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:strokeColor="#2E101640" android:strokeWidth="7.2"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M43.2,56 L51,63.6 L65.4,48.4" />
+    <path android:strokeWidth="7.2"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M43.2,54.4 L51,62 L65.4,46.8">
+        <aapt:attr name="android:strokeColor">
+            <gradient android:type="linear"
+                android:startX="54" android:startY="46" android:endX="54" android:endY="63">
+                <item android:offset="0" android:color="#FFFFFFFF" />
+                <item android:offset="1" android:color="#FFDCE4F8" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>

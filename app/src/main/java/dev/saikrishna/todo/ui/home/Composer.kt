@@ -87,6 +87,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -252,6 +253,10 @@ fun Composer(
         }
     }
     val collapsedTarget = chrome?.collapsed == true
+    // v0.10: the rotating hint only runs while the app is on screen.
+    val lifecycleState by androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle.currentStateFlow
+        .collectAsState()
+    val appVisible = lifecycleState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
     // v0.7.4: focus must be able to leave the field (tap outside, IME hidden, scroll, navigation).
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
@@ -410,12 +415,22 @@ fun Composer(
                         decorator = { inner ->
                             Box {
                                 if (state.text.isEmpty()) {
-                                    Text(
-                                        hint ?: if (voice.listening) "Listening…" else "Add a task",
-                                        style = type.body,
-                                        color = if (hint != null) c.warning else c.inkSecondary,
-                                        maxLines = 1,
-                                    )
+                                    val status = hint ?: if (voice.listening) "Listening…" else null
+                                    if (status != null) {
+                                        Text(
+                                            status,
+                                            style = type.body,
+                                            color = if (hint != null) c.warning else c.inkSecondary,
+                                            maxLines = 1,
+                                        )
+                                    } else {
+                                        // v0.10: cycles example phrases while idle (see ComposerHints).
+                                        RotatingHint(
+                                            active = !focused && !collapsedTarget && appVisible,
+                                            style = type.body,
+                                            color = c.inkSecondary,
+                                        )
+                                    }
                                 }
                                 inner()
                             }

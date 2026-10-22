@@ -1,9 +1,6 @@
 <resources>
-    <string name="app_name">Todo</string>
-    <string name="capture_label">Add to Todo</string>
-    <string name="tile_add_task">Add task</string>
+    <!-- app_name, capture_label, tile_add_task, widget_error and widget_load_failed are generated
+         from the single `appName` constant in app/build.gradle.kts (v0.10). -->
     <string name="widget_today_label">Today</string>
     <string name="widget_today_description">Today\'s tasks: tick them off, open one, or add a new one.</string>
-    <string name="widget_error">Couldn\'t load your tasks. Open Todo, then remove and re-add the widget if this stays.</string>
-    <string name="widget_load_failed">Couldn\'t load tasks · tap to open Todo</string>
 </resources>

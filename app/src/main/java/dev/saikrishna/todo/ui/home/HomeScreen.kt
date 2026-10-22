@@ -53,6 +53,9 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.saikrishna.todo.ui.motion.LaunchEntrance
+import dev.saikrishna.todo.ui.motion.LocalLaunchEntrance
+import dev.saikrishna.todo.ui.motion.launchEntrance
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import dev.saikrishna.todo.data.Task
@@ -190,6 +193,10 @@ fun HomeScreen(
 
     val all = tasks.orEmpty()
     if (tasks != null) tracker.baseline(all.map { it.id })
+    // v0.10 cold-start entrance: starts with the first data frame (the splash holds until then).
+    val launch = LocalLaunchEntrance.current
+    val launchReduced = LocalReducedMotion.current
+    LaunchedEffect(launch, tasks != null) { if (tasks != null) launch?.start(launchReduced) }
     // Latest values for callbacks remembered once (RowActions) so they never see stale data.
     val latestAll by rememberUpdatedState(all)
     val latestToday by rememberUpdatedState(today)
@@ -454,14 +461,16 @@ fun HomeScreen(
                     },
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .onSizeChanged { topPx.intValue = it.height },
+                        .onSizeChanged { topPx.intValue = it.height }
+                        .launchEntrance(launch, LaunchEntrance.Slot.Header),
                 )
 
                 Column(
                     Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .onSizeChanged { bottomPx.intValue = it.height },
+                        .onSizeChanged { bottomPx.intValue = it.height }
+                        .launchEntrance(launch, LaunchEntrance.Slot.Bottom),
                 ) {
                     UndoBar(
                         event = undo,

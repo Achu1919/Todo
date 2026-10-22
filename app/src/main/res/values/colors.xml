@@ -1,5 +1,10 @@
 <resources>
-    <color name="paper">#FBFAF7</color>
+    <!-- v0.10: the app backdrop where the splash icon sits (the sky between its mid and low keys),
+         so splash → first frame doesn't change colour. -->
+    <color name="paper">#CDD6E5</color>
+    <color name="sky_top">#66748F</color>
+    <color name="sky_low">#DAE2EE</color>
+    <color name="sky_deep">#B7C2D6</color>
     <color name="ink">#16171B</color>
     <color name="accent">#4F5BD5</color>
     <color name="widget_bg">#F5E6EBF3</color>

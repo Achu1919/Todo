@@ -18,6 +18,15 @@ class TodoApp : Application() {
     val database: TodoDatabase by lazy { TodoDatabase.build(this) }
     val repository: TaskRepository by lazy { TaskRepository(database) }
     val settings: SettingsRepository by lazy { SettingsRepository(this) }
+    /** v0.10: export / import. After an import every alarm is re-armed and the widget redrawn. */
+    val backup: dev.saikrishna.todo.data.BackupManager by lazy {
+        dev.saikrishna.todo.data.BackupManager(database, settings, BuildConfig.VERSION_NAME) { before, after ->
+            Reminders.rearm(this, before, after, System.currentTimeMillis(), repository.zone())
+            runCatching { dev.saikrishna.todo.widget.TodayWidget.refresh(this) }
+        }
+    }
+    /** v0.10: the launch entrance has played in this process (warm starts don't replay it). */
+    var entranceShown = false
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override fun onCreate() {

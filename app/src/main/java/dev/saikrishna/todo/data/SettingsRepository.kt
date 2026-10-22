@@ -15,6 +15,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 
 enum class ThemeMode {
     System, Light, Dark;
@@ -116,6 +117,35 @@ class SettingsRepository(context: Context) {
             it.remove(Keys.FocusManual); it.remove(Keys.FocusManualAt)
         }
     }
+
+    /**
+     * v0.10 backup: every user preference as JSON (per-device state such as "asked for the
+     * notification permission" is left out). Restored by [importPrefs], which only takes keys it
+     * knows with the right type, so an odd or future file cannot write garbage.
+     */
+    suspend fun exportPrefs(): org.json.JSONObject {
+        val p = store.data.first()
+        val o = org.json.JSONObject()
+        for (k in BackupBooleans) p[k]?.let { o.put(k.name, it) }
+        for (k in BackupStrings) p[k]?.let { o.put(k.name, it) }
+        for (k in BackupInts) p[k]?.let { o.put(k.name, it) }
+        for (k in BackupLongs) p[k]?.let { o.put(k.name, it) }
+        return o
+    }
+
+    suspend fun importPrefs(o: org.json.JSONObject) {
+        store.edit { e ->
+            for (k in BackupBooleans) if (o.has(k.name)) (o.opt(k.name) as? Boolean)?.let { e[k] = it }
+            for (k in BackupStrings) if (o.has(k.name)) (o.opt(k.name) as? String)?.let { e[k] = it.take(200) }
+            for (k in BackupInts) if (o.has(k.name)) (o.opt(k.name) as? Number)?.let { e[k] = it.toInt() }
+            for (k in BackupLongs) if (o.has(k.name)) (o.opt(k.name) as? Number)?.let { e[k] = it.toLong() }
+        }
+    }
+
+    private val BackupBooleans = listOf(Keys.ReduceMotion, Keys.Haptics, Keys.FocusAuto, Keys.PlanEnabled)
+    private val BackupStrings = listOf(Keys.Theme, Keys.FocusManual, Keys.FocusDays, Keys.FocusOutside)
+    private val BackupInts = listOf(Keys.FocusStart, Keys.FocusEnd, Keys.PlanMinute)
+    private val BackupLongs = listOf(Keys.FocusManualAt)
 
     private fun parseDays(s: String): Set<DayOfWeek> =
         s.split(',').mapNotNull { it.trim().toIntOrNull()?.takeIf { v -> v in 1..7 }?.let(DayOfWeek::of) }.toSet()

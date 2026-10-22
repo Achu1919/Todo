@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  v0.10 launcher icon switch. The adaptive icon, the splash and the previews all go through these
+  three aliases. To ship variant B instead of A, change "icon_a_" to "icon_b_" on the three lines.
+-->
+<resources>
+    <item name="ic_launcher_background" type="drawable">@drawable/icon_a_background</item>
+    <item name="ic_launcher_foreground" type="drawable">@drawable/icon_a_foreground</item>
+    <item name="ic_launcher_monochrome" type="drawable">@drawable/icon_a_monochrome</item>
+</resources>
