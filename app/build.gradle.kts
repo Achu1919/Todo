@@ -13,8 +13,8 @@ android {
         applicationId = "dev.saikrishna.todo"
         minSdk = 33
         targetSdk = 37
-        versionCode = 14
-        versionName = "0.8.0"
+        versionCode = 15
+        versionName = "0.8.1"
     }
 
     buildTypes {
@@ -22,7 +22,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             signingConfig = signingConfigs.getByName("debug")
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 
@@ -89,6 +89,9 @@ dependencies {
     implementation(libs.reorderable)
     // v0.8 home-screen widget (Apache 2.0).
     implementation(libs.glance.appwidget)
+    // v0.8.1: Glance 1.2.0 pulls WorkManager 2.7.1, whose keep rule loses InputMerger
+    // constructors under R8 full mode (the widget session never starts). Pin a current release.
+    implementation(libs.work.runtime)
 
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
@@ -98,6 +101,8 @@ dependencies {
     // Screenshot tests (Robolectric native graphics + Roborazzi), run with -Pshots.
     testImplementation(platform(libs.androidx.compose.bom))
     testImplementation(libs.robolectric)
+    testImplementation(libs.work.testing)
+    testImplementation(libs.glance.appwidget.testing)
     testImplementation(libs.roborazzi)
     testImplementation(libs.roborazzi.compose)
     testImplementation(libs.androidx.compose.ui.test.junit4)

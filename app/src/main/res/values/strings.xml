@@ -4,4 +4,6 @@
     <string name="tile_add_task">Add task</string>
     <string name="widget_today_label">Today</string>
     <string name="widget_today_description">Today\'s tasks: tick them off, open one, or add a new one.</string>
+    <string name="widget_error">Couldn\'t load your tasks. Open Todo, then remove and re-add the widget if this stays.</string>
+    <string name="widget_load_failed">Couldn\'t load tasks · tap to open Todo</string>
 </resources>

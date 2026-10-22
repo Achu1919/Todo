@@ -627,6 +627,53 @@ Local git: one commit per step (`git log`): baseline 0.7.4, domain + schema 5, U
 - Inexact alarm: the planning nudge can arrive a few minutes late in Doze.
 - Cross-window blur depends on the device and battery saver; the fallback is the scrim.
 
+## Milestone 8.1 (v0.8.1, code 15): Today widget stuck on the loading spinner (release only)
+
+### Root cause (confirmed from the v0.8.0 release dex and mapping; not yet seen in Sai's logcat)
+- **Where it comes from:** Glance 1.2.0 depends on WorkManager **2.7.1**. Its consumer rule `-keep class * extends androidx.work.InputMerger` keeps class names only.
+- **What R8 did:** AGP 8+ runs R8 in full mode, which does not keep implied default constructors. R8 removed `<init>()` from `androidx.work.OverwritingInputMerger` and `ArrayCreatingInputMerger` (dexdump showed no constructor).
+- **Why the widget never rendered:**
+  1. Glance draws the widget inside `SessionWorker` (a OneTimeWorkRequest).
+  2. Before running any one-time worker, `WorkerWrapper` creates the WorkSpec's InputMerger by name with `Class.newInstance()`.
+  3. That fails ("Trouble instantiating" / "Could not create Input Merger"; both strings are in the v0.8.0 dex). The work is marked FAILED and `provideGlance` never runs.
+  4. The launcher keeps `initialLayout` (`glance_default_loading_layout`): the dark rounded spinner.
+- Debug builds are not minified, so they work. That is why this did not show in the Robolectric tests.
+- **Same R8 cause, second bug:** `CompleteTaskAction` lost its no-arg constructor. Glance creates it by name, so ticking a ring in the widget would have silently failed.
+- **Minor:** `TodayWidget` was renamed to `l23`. GlanceAppWidgetManager stores that name, so it could drift between builds.
+
+### Checked and ruled out
+- The merged release manifest has `InitializationProvider` with `WorkManagerInitializer`, so the initializer is not removed.
+- `SessionWorker(Context, WorkerParameters)`, `WorkDatabase_Impl()`, `TodoDatabase_Impl()`, the Glance receivers and trampolines, and the startup initializers all kept their constructors.
+- `initialLayout` and `previewLayout` exist in the APK.
+
+### Fix
+- `androidx.work:work-runtime:2.11.2` is now an explicit dependency (replacing 2.7.1).
+- New `app/proguard-rules.pro`:
+  - InputMerger `<init>()`;
+  - ListenableWorker `(Context, WorkerParameters)`;
+  - `WorkDatabase_Impl` and every `RoomDatabase` `<init>()`;
+  - `androidx.startup.Initializer` `<init>()`;
+  - Glance `ActionCallback` implementations `<init>()`;
+  - `TodayWidgetReceiver`, plus `TodayWidget` kept by name.
+- `provideGlance` loads with a 5 s timeout and never throws. On failure it renders "Couldn't load tasks · tap to open Todo" and logs `Log.w("TodoWidget", ...)`.
+- `onCompositionError` logs, then shows our `widget_today_error` layout (`errorUiLayout`).
+- `refresh()` and `CompleteTaskAction` catch and log under the same tag.
+- `res/raw/keep.xml` keeps the widget XML, layouts and drawables from resource shrinking.
+
+### Verification
+- `scripts/verify_release.py [apk] [mapping]` checks the release dex. Every class created by name must survive unrenamed with the constructor it is created with:
+  - manifest components and startup initializers;
+  - all InputMerger, ActionCallback and ListenableWorker subclasses;
+  - Room `_Impl` classes;
+  - the widget classes.
+- Results: on the v0.8.0 APK it fails with 6 problems, matching the root cause. On v0.8.1 it is **OK (42 checks)**.
+- `widget/WidgetSessionTest` (Robolectric, test WorkManager) runs the whole path a launcher drives: bound widget → APPWIDGET_UPDATE → SessionWorker → provideGlance → RemoteViews. It asserts the tasks replace the loading layout and no session work FAILED.
+- `widget/TodayWidgetGlanceTest` (`runGlanceAppWidgetUnitTest`) checks the rows, the overdue label, the action descriptions, the empty state and the failure state.
+- Unit tests cannot run the minified classes, so the dex script covers the release build.
+
+### Risks
+- ColorOS can defer or kill background jobs ("auto launch" off, strict battery optimisation). Glance renders through WorkManager, so updates may lag until Todo is opened once. Logcat tag `TodoWidget` (plus `WM-` and `GlanceAppWidget`) shows failures.
+
 ## Tests
 - `org/QuickParseOrgTest` (10)
 - `FocusTest` (7, IST, edge minutes, overnight, manual until boundary)
@@ -651,7 +698,7 @@ Local git: one commit per step (`git log`): baseline 0.7.4, domain + schema 5, U
 
 ## Tests
 
-`./gradlew testDebugUnitTest`: **185 tests, all pass** (v0.8: +`ShareCaptureTest` 9, +`ViewFilterTest` 4, +`PlannerTest` 3, +`MigrationTest` 2 (4 → 5, 2 → 5), +`WidgetDataTest` 3, +`PlanReminderTest` 1, +`CaptureIntentTest` 3; v0.7.4: +`ComposerTouchTest` 4; v0.7.3: +`CollapseMachineTest` 8, +`ComposerCollapseTest` 4; v0.7.2: +`BottomFadeTest` 3; v0.7.1: +`ListPillMorphTest` 2; v0.7: +`QuickParseOrgTest` 10, +`FocusTest` 7, +`ReorderTest` 7, +`TemplatesTest` 6, +`OrgRepositoryTest` 9, +`MigrationTest` 1 (3 → 4), +`NotificationOpenTest` 4; v0.6.2: +`HeaderEdgeTest` 3; v0.6.1: +`TransitionTest` 6; v0.6: +`QuickParseTest` 21, +`RepeatRuleTest` 12, +`SnoozeTest` 6, +`ComposerTest` 2 (chips appear, submit carries the parse, tapping a chip keeps the words), +`MigrationTest` 1 (v2 → v3 preserves data), +`RepeatRepositoryTest` 2; v0.5: +`PillFirstFrameTest` 1, +`TaskPanelTest` 3). `-Pshots --tests '*ScreenshotTest*'`: **44** screenshot tests (v0.8: +10 in `V08ScreenshotTest`: capture light/dark + open filmstrip + save/confirm, plan light/dark + keep filmstrip + summary, search filters light/dark, widget + preview light/dark) (v0.7.3: +`ComposerPillScreenshotTest` 2) (v0.7.2: +3 `ComposerFrostScreenshotTest`; v0.7.1: +4 pill shots; v0.7: +12 in `OrgScreenshotTest`), all pass. `SectionsTest` was replaced by:
+`./gradlew testDebugUnitTest`: **189 tests, all pass** (v0.8.1: +`WidgetSessionTest` 2, +`TodayWidgetGlanceTest` 2; v0.8: +`ShareCaptureTest` 9, +`ViewFilterTest` 4, +`PlannerTest` 3, +`MigrationTest` 2 (4 → 5, 2 → 5), +`WidgetDataTest` 3, +`PlanReminderTest` 1, +`CaptureIntentTest` 3; v0.7.4: +`ComposerTouchTest` 4; v0.7.3: +`CollapseMachineTest` 8, +`ComposerCollapseTest` 4; v0.7.2: +`BottomFadeTest` 3; v0.7.1: +`ListPillMorphTest` 2; v0.7: +`QuickParseOrgTest` 10, +`FocusTest` 7, +`ReorderTest` 7, +`TemplatesTest` 6, +`OrgRepositoryTest` 9, +`MigrationTest` 1 (3 → 4), +`NotificationOpenTest` 4; v0.6.2: +`HeaderEdgeTest` 3; v0.6.1: +`TransitionTest` 6; v0.6: +`QuickParseTest` 21, +`RepeatRuleTest` 12, +`SnoozeTest` 6, +`ComposerTest` 2 (chips appear, submit carries the parse, tapping a chip keeps the words), +`MigrationTest` 1 (v2 → v3 preserves data), +`RepeatRepositoryTest` 2; v0.5: +`PillFirstFrameTest` 1, +`TaskPanelTest` 3). `-Pshots --tests '*ScreenshotTest*'`: **44** screenshot tests (v0.8: +10 in `V08ScreenshotTest`: capture light/dark + open filmstrip + save/confirm, plan light/dark + keep filmstrip + summary, search filters light/dark, widget + preview light/dark) (v0.7.3: +`ComposerPillScreenshotTest` 2) (v0.7.2: +3 `ComposerFrostScreenshotTest`; v0.7.1: +4 pill shots; v0.7: +12 in `OrgScreenshotTest`), all pass. `SectionsTest` was replaced by:
 - `PagesTest` (11): Today/Upcoming/Done classification; Today = open today/overdue/undated in creation order with "Overdue · Yesterday"; Upcoming grouped by day with headers (Tomorrow / Friday / Wed, 28 Oct) and no repeated date; Done grouped by completion day newest first with Clear done count; empty states and All clear count; leaving rows stay on their page (dwell vs collapsing, reopen from Done); day labels (Locale.UK); row meta; overrides + hidden deletes; due chips (next week = next Monday); entrance tracker baseline + forget.
 - `SettingsTest` (4): defaults when nothing stored, stored values, unknown theme → System, `ThemeMode.isDark`.
 - `SearchTest` (3): blank query, title+notes case-insensitive match with open-first order, no match.
@@ -673,7 +720,7 @@ Milestone 1 tests:
 7. Header is glass with title + search/settings + filter pill; the open-task count digit slide was dropped with the old header. Launch entrance §6.1 not done (step 9). §6.8 inline expand skipped; v0.5 replaces the sheet with the contextual floating panel (6.7-style).
 8. In-app reduce motion / haptics / theme are real settings (DataStore). Theme changes switch instantly (no animated palette crossfade).
 9. `Settings.System.HAPTIC_FEEDBACK_ENABLED` is deprecated in SDK 37 but is still read (suppressed) as the spec asks.
-10. Debug APK (milestone 2 build) is about 31 MB because it is unminified. **Release APK (v0.8.0 / code 14): 5,647,619 bytes (about 5.6 MB), apksigner verify OK (V2, Android Debug), aapt2 badging versionCode 14 / versionName 0.8.0.** v0.7.4 / code 13: 4,655,871 bytes. v0.7.1 / code 10: 4,639,487 bytes. v0.7.0 / code 9: 4,623,103 bytes. v0.6.2 / code 8: 4,442,879 bytes. v0.6.1 / code 7: 4,442,879 bytes (Navigation 3 removed). v0.6.0 / code 6: 4,476,032 bytes. v0.5.0 / code 5: 4,301,408 bytes (about 4.3 MB). Milestone 4 (v0.4.0 / code 4): 4,285,024 bytes (about 4.3 MB; +0.9 MB for the two Newsreader variable fonts, minus Instrument Serif). Milestone 3 was 3,769,333 bytes, with R8, resource shrinking, baseline profile, debug-key signing (apksigner verify OK, V2).
+10. Debug APK (milestone 2 build) is about 31 MB because it is unminified. **Release APK (v0.8.1 / code 15): 5,658,443 bytes (about 5.7 MB), apksigner verify OK (V2, Android Debug), aapt2 badging versionCode 15 / versionName 0.8.1, `scripts/verify_release.py` OK.** v0.8.0 / code 14: 5,647,619 bytes. v0.7.4 / code 13: 4,655,871 bytes. v0.7.1 / code 10: 4,639,487 bytes. v0.7.0 / code 9: 4,623,103 bytes. v0.6.2 / code 8: 4,442,879 bytes. v0.6.1 / code 7: 4,442,879 bytes (Navigation 3 removed). v0.6.0 / code 6: 4,476,032 bytes. v0.5.0 / code 5: 4,301,408 bytes (about 4.3 MB). Milestone 4 (v0.4.0 / code 4): 4,285,024 bytes (about 4.3 MB; +0.9 MB for the two Newsreader variable fonts, minus Instrument Serif). Milestone 3 was 3,769,333 bytes, with R8, resource shrinking, baseline profile, debug-key signing (apksigner verify OK, V2).
 11. Auto-scroll for a new row that is fully off-screen uses `animateScrollToItem(index)`, which lands it at the top of the viewport unless it is the last list item. The common case (a partly hidden row) scrolls by the overflow on Smooth.
 12. Swipe-to-delete fling velocity threshold is M3's internal default (not configurable in 1.4.0); only the 35 % positional threshold is set. Swipe is end→start only.
 13. "Next week" chip = next Monday. Search results are not grouped by page. Licences screen lists libraries by name + licence (only the font OFL texts are bundled).

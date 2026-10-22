@@ -51,6 +51,10 @@ import dev.saikrishna.todo.reminders.Reminders
 import dev.saikrishna.todo.ui.capture.AddTaskTileService
 import kotlinx.coroutines.flow.first
 import java.time.Instant
+import android.util.Log
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
 
 /** Our widget palette (light / dark), from the app's ink and accent tokens; the background and
  * "+" fill are res colours (widget_bg / widget_ink, values + values-night). */
@@ -68,21 +72,52 @@ internal object WidgetColors {
  * the background, via [CompleteTaskAction]); tap a row to open the app at that task's panel;
  * "+" opens the floating capture card. Refreshed whenever the tasks change ([TodoApp]).
  */
-class TodayWidget : GlanceAppWidget() {
+class TodayWidget : GlanceAppWidget(errorUiLayout = R.layout.widget_today_error) {
     override val sizeMode: SizeMode = SizeMode.Exact
 
+    /**
+     * Must reach [provideContent] quickly and never throw, or the launcher keeps showing the
+     * loading layout: the data load is bounded ([LoadTimeoutMs]) and any failure renders a
+     * "couldn't load" state (and is logged under [TAG]).
+     */
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val app = context.applicationContext as TodoApp
-        val today = Instant.ofEpochMilli(app.repository.now()).atZone(app.repository.zone()).toLocalDate()
-        val data = WidgetData.build(app.repository.tasks.first(), today)
+        val data = loadOrNull(context, id)
         provideContent { TodayWidgetContent(context, data) }
     }
 
+    override fun onCompositionError(context: Context, glanceId: GlanceId, appWidgetId: Int, throwable: Throwable) {
+        Log.w(TAG, "composition failed for widget $appWidgetId; showing the error layout", throwable)
+        super.onCompositionError(context, glanceId, appWidgetId, throwable)
+    }
+
     companion object {
-        /** Refresh every placed Today widget (no-op when none is placed). */
+        const val TAG = "TodoWidget"
+        const val LoadTimeoutMs = 5_000L
+
+        internal suspend fun loadOrNull(context: Context, id: GlanceId? = null): WidgetData? = try {
+            withTimeout(LoadTimeoutMs) {
+                val app = context.applicationContext as TodoApp
+                val today = Instant.ofEpochMilli(app.repository.now()).atZone(app.repository.zone()).toLocalDate()
+                WidgetData.build(app.repository.tasks.first(), today)
+            }
+        } catch (e: TimeoutCancellationException) {
+            Log.w(TAG, "provideGlance: loading tasks took over ${LoadTimeoutMs} ms ($id)", e); null
+        } catch (e: CancellationException) {
+            throw e
+        } catch (t: Throwable) {
+            Log.w(TAG, "provideGlance: loading tasks failed ($id)", t); null
+        }
+
+        /** Refresh every placed Today widget (no-op when none is placed). Never throws. */
         suspend fun refresh(context: Context) {
-            if (GlanceAppWidgetManager(context).getGlanceIds(TodayWidget::class.java).isEmpty()) return
-            TodayWidget().updateAll(context)
+            try {
+                if (GlanceAppWidgetManager(context).getGlanceIds(TodayWidget::class.java).isEmpty()) return
+                TodayWidget().updateAll(context)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                Log.w(TAG, "refresh failed", t)
+            }
         }
     }
 }
@@ -95,9 +130,15 @@ class TodayWidgetReceiver : GlanceAppWidgetReceiver() {
 class CompleteTaskAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val id = parameters[TaskIdKey] ?: return
-        val app = context.applicationContext as TodoApp
-        app.repository.setDone(id, true) // alarms (incl. a repeat's next instance) follow via TodoApp
-        Reminders.dismissNotification(app, id)
+        try {
+            val app = context.applicationContext as TodoApp
+            app.repository.setDone(id, true) // alarms (incl. a repeat's next instance) follow via TodoApp
+            Reminders.dismissNotification(app, id)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (t: Throwable) {
+            Log.w(TodayWidget.TAG, "complete task $id failed", t)
+        }
         TodayWidget().update(context, glanceId)
     }
 }
@@ -111,7 +152,7 @@ internal fun openTaskIntent(context: Context, id: Long): Intent =
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
 
 @Composable
-fun TodayWidgetContent(context: Context, data: WidgetData) {
+fun TodayWidgetContent(context: Context, data: WidgetData?) {
     Column(
         GlanceModifier
             .fillMaxSize()
@@ -128,7 +169,7 @@ fun TodayWidgetContent(context: Context, data: WidgetData) {
                 modifier = GlanceModifier.clickable(actionStartActivity(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))),
             )
             Spacer(GlanceModifier.width(8.dp))
-            if (data.openToday > 0) {
+            if (data != null && data.openToday > 0) {
                 Text("${data.openToday}", style = TextStyle(color = WidgetColors.inkSecondary, fontSize = 13.sp))
             }
             Spacer(GlanceModifier.defaultWeight())
@@ -145,7 +186,14 @@ fun TodayWidgetContent(context: Context, data: WidgetData) {
             }
         }
         Spacer(GlanceModifier.height(6.dp))
-        if (data.rows.isEmpty()) {
+        if (data == null) {
+            Box(
+                GlanceModifier.fillMaxSize().clickable(actionStartActivity(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(context.getString(R.string.widget_load_failed), style = TextStyle(color = WidgetColors.inkSecondary, fontSize = 13.sp))
+            }
+        } else if (data.rows.isEmpty()) {
             Box(GlanceModifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text("All clear", style = TextStyle(color = WidgetColors.inkSecondary, fontSize = 14.sp))
             }
