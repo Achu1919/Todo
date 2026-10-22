@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performSemanticsAction
@@ -225,7 +226,12 @@ class TransitionTest {
 
     private fun cycle(screen: String, viaGesture: Boolean) {
         val tag = "screen-$screen"
-        val pushRun = record(50, tag, { rule.onNodeWithContentDescription(screen).performSemanticsAction(SemanticsActions.OnClick) })
+        // v0.9: Settings is a row in the lists panel; open the panel first, the push starts at the row tap.
+        if (screen == "Settings") openListsPanel()
+        val pushRun = record(50, tag, {
+            if (screen == "Settings") rule.onNodeWithText("Settings").performSemanticsAction(SemanticsActions.OnClick)
+            else rule.onNodeWithContentDescription(screen).performSemanticsAction(SemanticsActions.OnClick)
+        })
         val pushed = settled()
         report.appendLine(pushCheck("push-$screen", pushRun, pushed, skipTopRows = if (screen == "Search") 3 else 0))
         filmstrip("transition-push-${screen.lowercase()}", pushRun.frames)
@@ -260,7 +266,7 @@ class TransitionTest {
 
     /** Three levels deep and back: every screen pops through the same path; Home survives. */
     @Test fun licencesAndBackTwice() {
-        rule.onNodeWithContentDescription("Settings").performSemanticsAction(SemanticsActions.OnClick)
+        openSettings()
         rule.mainClock.advanceTimeBy(1_500)
         rule.onNodeWithText("Licences").performSemanticsAction(SemanticsActions.OnClick)
         rule.mainClock.advanceTimeBy(1_500)
@@ -280,7 +286,7 @@ class TransitionTest {
     /** Reduced motion swaps the slide for a crossfade; Home is still there on every frame. */
     @Test fun reducedMotionArrowPop() {
         // Through the real UI: open Settings and switch Reduce motion on.
-        rule.onNodeWithContentDescription("Settings").performSemanticsAction(SemanticsActions.OnClick)
+        openSettings()
         settled()
         rule.mainClock.autoAdvance = true
         rule.onAllNodes(androidx.compose.ui.test.isToggleable()).onFirst().performSemanticsAction(SemanticsActions.OnClick)
@@ -297,7 +303,7 @@ class TransitionTest {
         File(dir, "transition-report-pop-Settings-arrow-reduced.txt").writeText(report.toString())
         // Settings persist for the whole test process (DataStore is process-wide): switch it back off.
         rule.mainClock.autoAdvance = true
-        rule.onNodeWithContentDescription("Settings").performSemanticsAction(SemanticsActions.OnClick)
+        openSettings()
         rule.mainClock.advanceTimeBy(1_000)
         rule.onAllNodes(androidx.compose.ui.test.isToggleable()).onFirst().performSemanticsAction(SemanticsActions.OnClick)
         rule.waitUntil(5_000) {
@@ -312,4 +318,15 @@ class TransitionTest {
     @Test fun settingsGesture() = cycle("Settings", viaGesture = true)
     @Test fun searchArrow() = cycle("Search", viaGesture = false)
     @Test fun searchGesture() = cycle("Search", viaGesture = true)
+
+    /** v0.9: Settings lives in the lists panel (bottom-left lists button), no longer in the header. */
+    private fun openListsPanel() {
+        rule.onNodeWithTag("lists-button").performSemanticsAction(SemanticsActions.OnClick)
+        rule.mainClock.advanceTimeBy(1_000)
+    }
+
+    private fun openSettings() {
+        openListsPanel()
+        rule.onNodeWithText("Settings").performSemanticsAction(SemanticsActions.OnClick)
+    }
 }

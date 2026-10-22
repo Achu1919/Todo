@@ -70,8 +70,13 @@ class ComposerTouchTest {
     }
 
     private fun settle() { rule.mainClock.advanceTimeBy(1_200); rule.waitForIdle() }
-    private fun panelOpen() = rule.onAllNodes(hasContentDescription("Close")).fetchSemanticsNodes().isNotEmpty()
+    private fun hostOpen() = rule.onAllNodes(hasContentDescription("Close")).fetchSemanticsNodes().isNotEmpty()
+    private fun listsPanelOpen() = rule.onAllNodes(hasTestTag("lists-panel"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+    /** A task panel (a row was opened); the v0.9 lists panel shares the host but is not a leak. */
+    private fun panelOpen() = hostOpen() && !listsPanelOpen()
+    private fun lists(): Rect = rule.onNode(hasTestTag("lists-button"), useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
     private fun closePanel() { rule.onNode(hasContentDescription("Close")).performSemanticsAction(SemanticsActions.OnClick); settle() }
+    private fun closeAny() { if (hostOpen()) closePanel() }
     private fun surface(): Rect = rule.onNode(hasTestTag("composer-surface"), useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
     private fun fieldText() = rule.onNode(hasSetTextAction()).fetchSemanticsNode().config[SemanticsProperties.EditableText].text
     private fun tap(p: Offset) { rule.onRoot().performTouchInput { click(p) }; settle() }
@@ -120,40 +125,53 @@ class ComposerTouchTest {
         assertFalse("page switch cleared focus", chrome.focused)
     }
 
-    /** Points over the bar and around it; each must never reach a row. */
-    private fun barPoints(s: Rect, collapsed: Boolean): List<Pair<String, Offset>> {
+    /**
+     * Points over the bar, the v0.9 lists button and around both; none may reach a row. Points on
+     * the lists button open the lists panel (expected, [onButton]).
+     */
+    private fun barPoints(s: Rect, l: Rect, collapsed: Boolean): List<Triple<String, Offset, Boolean>> {
         val cy = s.center.y
         val pts = mutableListOf(
-            "left rim" to Offset(s.left + 1.5f * d, cy),
-            "right rim" to Offset(s.right - 1.5f * d, cy),
-            "top rim" to Offset(s.center.x + (if (collapsed) 0f else 40f * d), s.top + 1f * d),
-            "bottom rim" to Offset(s.center.x + (if (collapsed) 0f else 40f * d), s.bottom - 1f * d),
-            "shadow above" to Offset(s.center.x, s.top - 4f * d),
-            "shadow below" to Offset(s.center.x, s.bottom + 6f * d),
-            "outside left edge" to Offset(s.left - 5f * d, cy),
-            "outside right edge" to Offset(s.right + 5f * d, cy),
-            "corner" to Offset(s.left + 3f * d, s.top + 3f * d),
+            Triple("left rim", Offset(s.left + 1.5f * d, cy), false),
+            Triple("right rim", Offset(s.right - 1.5f * d, cy), false),
+            Triple("top rim", Offset(s.center.x + (if (collapsed) 0f else 40f * d), s.top + 1f * d), false),
+            Triple("bottom rim", Offset(s.center.x + (if (collapsed) 0f else 40f * d), s.bottom - 1f * d), false),
+            Triple("shadow above", Offset(s.center.x, s.top - 4f * d), false),
+            Triple("shadow below", Offset(s.center.x, s.bottom + 6f * d), false),
+            Triple("outside left edge (gap)", Offset(s.left - 5f * d, cy), false),
+            Triple("outside right edge", Offset(s.right + 5f * d, cy), false),
+            Triple("corner", Offset(s.left + 3f * d, s.top + 3f * d), false),
+            // v0.9 lists button and the 8 dp gap between it and the capsule.
+            Triple("lists button centre", l.center, true),
+            Triple("lists button left rim", Offset(l.left + 1.5f * d, l.center.y), true),
+            Triple("gap top", Offset((l.right + s.left) / 2f, s.top + 2f * d), false),
+            Triple("gap bottom", Offset((l.right + s.left) / 2f, s.bottom - 2f * d), false),
+            Triple("left of button (5 dp)", Offset(l.left - 5f * d, l.center.y), false),
+            Triple("button shadow below", Offset(l.center.x, l.bottom + 6f * d), false),
         )
         if (collapsed) {
-            pts += "divider" to Offset(s.center.x, cy)
-            pts += "beside divider" to Offset(s.center.x + 4f * d, s.top + 4f * d)
+            pts += Triple("divider", Offset(s.center.x, cy), false)
+            pts += Triple("beside divider", Offset(s.center.x + 4f * d, s.top + 4f * d), false)
         } else {
-            pts += "right of mic (2 dp inset)" to Offset(s.right - 1f * d, s.bottom - 3f * d)
-            pts += "margin left" to Offset(s.left - 16f * d, cy)
-            pts += "margin right" to Offset(s.right + 16f * d, cy)
+            pts += Triple("right of mic (2 dp inset)", Offset(s.right - 1f * d, s.bottom - 3f * d), false)
+            pts += Triple("margin left", Offset(l.left - 16f * d, cy), false)
+            pts += Triple("margin right", Offset(s.right + 16f * d, cy), false)
         }
         return pts
     }
 
-    private fun probe(state: String, s: Rect, collapsed: Boolean, long: Boolean, fails: MutableList<String>, log: StringBuilder, prepare: () -> Unit = {}) {
-        for ((name, p) in barPoints(s, collapsed)) {
+    private fun probe(state: String, s: Rect, l: Rect, collapsed: Boolean, long: Boolean, fails: MutableList<String>, log: StringBuilder, prepare: () -> Unit = {}) {
+        for ((name, p, onButton) in barPoints(s, l, collapsed)) {
             prepare()
             val before = HomeTestHooks.rowInput
             if (long) longPress(p) else tap(p)
             val leaked = HomeTestHooks.rowInput != before || panelOpen()
-            log.append("[k=${"%.2f".format(chrome.progress.value)} c=${chrome.collapsed}] $state ${if (long) "long" else "tap"} $name (${"%.0f".format(p.x / d)},${"%.0f".format(p.y / d)} dp): ${if (leaked) "LEAK" else "blocked"}\n")
+            val listsUp = listsPanelOpen()
+            log.append("[k=${"%.2f".format(chrome.progress.value)} c=${chrome.collapsed}] $state ${if (long) "long" else "tap"} $name (${"%.0f".format(p.x / d)},${"%.0f".format(p.y / d)} dp): ${if (leaked) "LEAK" else if (listsUp) "lists panel" else "blocked"}\n")
             if (leaked) fails += "$state ${if (long) "long-press" else "tap"} at $name reached a row"
-            if (panelOpen()) closePanel()
+            if (!long && onButton && !listsUp) fails += "$state tap at $name did not open the lists panel"
+            if (!onButton && listsUp) fails += "$state ${if (long) "long-press" else "tap"} at $name opened the lists panel"
+            closeAny()
             if (chrome.focused) chrome.dismiss()
             settle()
         }
@@ -170,32 +188,34 @@ class ComposerTouchTest {
         // A row really is behind the bar: the same y beside the collapsed pill reaches it (checked below).
         val full = surface()
         val expanded = { chrome.expand(); settle() }
-        probe("expanded", full, false, long = false, fails, log, expanded)
-        probe("expanded", full, false, long = true, fails, log, expanded)
+        val fullLists = lists()
+        probe("expanded", full, fullLists, false, long = false, fails, log, expanded)
+        probe("expanded", full, fullLists, false, long = true, fails, log, expanded)
 
         chrome.collapseForTest(); settle()
         val pill = surface()
         assertEquals(120f, pill.width / d, 0.5f)
         val collapsedPrep = { chrome.collapseForTest(); settle() }
-        probe("collapsed", pill, true, long = false, fails, log, collapsedPrep)
-        probe("collapsed", pill, true, long = true, fails, log, collapsedPrep)
+        val pairLists = lists()
+        probe("collapsed", pill, pairLists, true, long = false, fails, log, collapsedPrep)
+        probe("collapsed", pill, pairLists, true, long = true, fails, log, collapsedPrep)
         // Mid-morph geometry (the surface parked at 25 / 50 / 75 %, re-parked before every touch).
         for (k in listOf(0.25f, 0.5f, 0.75f)) {
             val park = { chrome.collapseForTest(); settle(); snapProgress(k) }
             park()
-            probe("mid-morph k=$k", surface(), true, long = false, fails, log, park)
+            probe("mid-morph k=$k", surface(), lists(), true, long = false, fails, log, park)
         }
         snapProgress(1f)
 
-        // Beside the pill: rows get the tap.
+        // Beside the pair (lists button + pill): rows get the tap.
         chrome.collapseForTest(); settle()
-        for ((name, p) in listOf("left of pill" to Offset(pill.left - 40f * d, pill.center.y), "right of pill" to Offset(pill.right + 40f * d, pill.center.y))) {
+        for ((name, p) in listOf("left of pair" to Offset(pairLists.left - 40f * d, pill.center.y), "right of pair" to Offset(pill.right + 40f * d, pill.center.y))) {
             val before = HomeTestHooks.rowInput
             tap(p)
             val reached = HomeTestHooks.rowInput != before
             log.append("collapsed tap $name: ${if (reached) "reached row" else "NOT reached"}\n")
             if (!reached) fails += "tap $name did not reach the row"
-            if (panelOpen()) closePanel()
+            closeAny()
             chrome.collapseForTest(); settle()
         }
         // In the bottom fade above the expanded bar, rows stay tappable.
@@ -207,14 +227,32 @@ class ComposerTouchTest {
             tap(Offset(full.left + 60f * d, full.top - dy * d))
             val ok = HomeTestHooks.rowInput != before
             log.append("expanded tap in the bottom fade $dy dp above the bar: ${if (ok) "reached row" else "not on a row"}\n")
-            if (panelOpen()) closePanel()
+            closeAny()
             if (ok) { fadeOk = true; break }
         }
         if (!fadeOk) fails += "row under the bottom fade not tappable"
-        if (panelOpen()) closePanel()
+        closeAny()
 
         File(dir, "composer-touch-probe-after.txt").writeText(log.toString())
         println(log)
         assertTrue(fails.joinToString("\n"), fails.isEmpty())
+    }
+
+    /** v0.9: tapping the lists button while typing ends editing first, then opens the panel. */
+    @Test fun listsButtonWhileTypingDismissesThenOpens() {
+        start()
+        rule.onNode(hasSetTextAction()).performClick(); settle()
+        rule.onNode(hasSetTextAction()).performTextInput("Half a thought"); settle()
+        assertTrue(chrome.focused)
+        val before = chrome.dismissCount
+        tap(lists().center)
+        assertFalse("editing ended", chrome.focused)
+        assertEquals("IME hide requested once", before + 1, chrome.dismissCount)
+        assertTrue("lists panel open", listsPanelOpen())
+        assertEquals("draft kept", "Half a thought", fieldText())
+        assertEquals(0, HomeTestHooks.rowInput)
+        closePanel()
+        assertFalse(listsPanelOpen())
+        assertFalse("the button did not take focus", chrome.focused)
     }
 }

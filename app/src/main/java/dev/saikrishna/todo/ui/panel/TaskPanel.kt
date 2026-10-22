@@ -148,6 +148,8 @@ private class PanelMotion {
     /** Morph: progress at or below which the capsule is within 0.5 dp of the anchor. */
     var landAt = 0f
     var bare = false
+    /** v0.9: the anchor's own shadow level (the lists button carries the composer's Mid shadow). */
+    var anchorLevel: dev.saikrishna.todo.ui.components.GlassLevel = dev.saikrishna.todo.ui.components.GlassLevel.Low
     /** Last laid-out panel rect (host coordinates). */
     var target: Rect? = null
     var colors: dev.saikrishna.todo.ui.theme.AppColors? = null
@@ -184,6 +186,8 @@ fun TaskPanelHost(
     style: PanelStyle = PanelStyle.Card,
     /** Morph: anchors that are bare icons (no glass of their own): the capsule fades its glass out as it lands. */
     bareAnchors: Set<Long> = emptySet(),
+    /** v0.9: anchors whose glass shadow is not Low (the morph starts from exactly that shadow). */
+    anchorLevels: Map<Long, dev.saikrishna.todo.ui.components.GlassLevel> = emptyMap(),
     /**
      * Morph: the anchor's own content (e.g. the pill's dot + label + chevron, no surface), drawn
      * inside the capsule as it nears the anchor, so the capsule lands as the pill itself.
@@ -234,6 +238,7 @@ fun TaskPanelHost(
             }
             shown = openId
             m.bare = openId in bareAnchors
+            m.anchorLevel = anchorLevels[openId] ?: dev.saikrishna.todo.ui.components.GlassLevel.Low
             anchors.hidden = openId
             m.drag = 0f
             m.back = 0f
@@ -588,8 +593,8 @@ private fun androidx.compose.ui.graphics.drawscope.ContentDrawScope.drawMorph(
     path.reset()
     path.addRoundRect(RoundRect(r, CornerRadius(corner)))
     clipPath(path, ClipOp.Difference) {
-        // Pill shadow (identical to glassShadow(Low)) fading out…
-        val low = dev.saikrishna.todo.ui.components.GlassLevel.Low
+        // Pill shadow (identical to the anchor's glassShadow, Low by default) fading out…
+        val low = motion.anchorLevel
         val pillA = if (bare) 0f else c.glassShadow.alpha * low.strength / low.rings * 1.6f * (1f - gc)
         if (pillA > 0f) for (i in 1..low.rings) {
             val e = low.spread.toPx() * i / low.rings

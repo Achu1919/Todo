@@ -132,7 +132,7 @@ internal fun PickerRow(label: String, color: Int?, count: Int, selected: Boolean
     ) {
         Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) {
             if (color != null) ListDot(c.listColor(color), 10.dp)
-            else Icon(AppIcons.Lists, null, tint = c.inkSecondary, modifier = Modifier.size(18.dp))
+            else Icon(AppIcons.Layers, null, tint = c.inkSecondary, modifier = Modifier.size(18.dp))
         }
         Spacer(Modifier.width(12.dp))
         Text(label, style = AppTheme.type.body, color = c.ink, modifier = Modifier.weight(1f), maxLines = 1)

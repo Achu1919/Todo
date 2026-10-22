@@ -78,12 +78,15 @@ class ComposerCollapseTest {
     private fun surfaces(): List<Rect> =
         rule.onAllNodes(hasTestTag("composer-surface"), useUnmergedTree = true).fetchSemanticsNodes().map { it.boundsInRoot }
 
-    private class F(val bounds: List<Rect>, val k: Float, val bmp: Bitmap)
+    private fun listsButtons(): List<Rect> =
+        rule.onAllNodes(hasTestTag("lists-button"), useUnmergedTree = true).fetchSemanticsNodes().map { it.boundsInRoot }
+
+    private class F(val bounds: List<Rect>, val k: Float, val bmp: Bitmap, val lists: List<Rect> = emptyList())
 
     private fun step(): F {
         rule.mainClock.advanceTimeByFrame()
         val bmp = rule.onRoot().captureToImage().asAndroidBitmap().copy(Bitmap.Config.ARGB_8888, false)
-        return F(surfaces(), chrome.progress.value, bmp)
+        return F(surfaces(), chrome.progress.value, bmp, listsButtons())
     }
 
     private fun record(trigger: () -> Unit, target: Float): List<F> {
@@ -202,5 +205,61 @@ class ComposerCollapseTest {
         val done = frames.indexOfFirst { it.k == 1f && !chrome.fade.isRunning && chrome.fade.value == 1f }
         println("REDUCED: widths ${widths.map { it / density }}, frames ${frames.size}")
         assertTrue(frames.size <= 16)
+    }
+
+    // ---- v0.9: the lists button + composer pair ----
+
+    private fun checkPair(name: String, frames: List<F>, screenCx: Float, fails: MutableList<String>): Float {
+        frames.forEachIndexed { i, f ->
+            if (f.lists.size != 1 || f.bounds.size != 1) { fails += "$name frame $i: ${f.lists.size} lists buttons, ${f.bounds.size} surfaces"; return@forEachIndexed }
+            val l = f.lists[0]; val s = f.bounds[0]
+            val cx = (l.left + s.right) / 2f
+            if (abs(cx - screenCx) > halfDp) fails += "$name frame $i: pair centre $cx vs screen centre $screenCx"
+            // Rigidly coupled: the button's left edge and the capsule's left edge move together
+            // (same progress, same spring): capsule.left - button.left == 48 + 8 dp in every frame.
+            if (abs((s.left - l.left) / density - 56f) > 0.5f) fails += "$name frame $i: button/capsule offset ${(s.left - l.left) / density} dp"
+            if (abs(l.width / density - 48f) > 0.5f || abs(l.height / density - 48f) > 0.5f) fails += "$name frame $i: button ${l.width / density}x${l.height / density} dp"
+            if (abs(l.bottom - s.bottom) > halfDp) fails += "$name frame $i: button bottom ${l.bottom} vs capsule ${s.bottom}"
+        }
+        val landing = frames.indexOfFirst { it.k == frames.last().k }
+        val d = diff(frames[landing].bmp, frames.last().bmp)
+        if (d != 0f) fails += "$name landing frame $landing differs from settled by $d"
+        println("PAIR $name: ${frames.size} frames, landing frame $landing (${(landing + 1) * 16} ms), button x ${frames.map { "%.0f".format((it.lists.firstOrNull()?.left ?: -1f) / density) }}, landing diff $d")
+        return d
+    }
+
+    @Test fun listsButtonAndPillCollapseIntoOneCentredPair() {
+        start()
+        val screenCx = rule.onRoot().fetchSemanticsNode().boundsInRoot.width / 2f
+        val full = surfaces().single()
+        val fullLists = listsButtons().single()
+        assertEquals("expanded: button at the 24 dp margin", 24f, fullLists.left / density, 0.5f)
+        assertEquals("expanded: 8 dp gap", 8f, (full.left - fullLists.right) / density, 0.5f)
+        assertEquals("expanded: capsule to the 24 dp margin", 24f, (screenCx * 2 - full.right) / density, 0.5f)
+        val collapse = record({ chrome.collapseForTest() }, 1f)
+        rule.mainClock.advanceTimeBy(500)
+        val pill = surfaces().single(); val lb = listsButtons().single()
+        val expand = record({ chrome.expand() }, 0f)
+        val fails = ArrayList<String>()
+        checkPair("collapse", collapse, screenCx, fails)
+        checkPair("expand", expand, screenCx, fails)
+        assertEquals("pill width", 120f, pill.width / density, 0.5f)
+        assertEquals("collapsed gap", 8f, (pill.left - lb.right) / density, 0.5f)
+        assertEquals("pair width", 176f, (pill.right - lb.left) / density, 0.5f)
+        assertEquals("pair centred", screenCx, (lb.left + pill.right) / 2f, halfDp)
+        val crop = Rect(0f, full.top, screenCx * 2, full.bottom)
+        filmstrip("composer-pair-collapse-filmstrip", collapse, crop)
+        filmstrip("composer-pair-expand-filmstrip", expand, crop)
+        assertTrue(fails.joinToString("\n"), fails.isEmpty())
+    }
+
+    @Test fun reducedMotionPairIsACrossfade() {
+        start(reduced = true)
+        val x0 = listsButtons().single().left
+        val frames = record({ chrome.collapseForTest() }, 1f)
+        val xs = frames.map { it.lists.single().left }.distinct()
+        // Two positions only (expanded, collapsed), never in between; the button shares the composer's fade.
+        assertTrue("button x $xs", xs.size <= 2 && xs.contains(x0))
+        assertTrue("faded together", frames.all { it.lists.size == 1 })
     }
 }

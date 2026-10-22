@@ -38,14 +38,15 @@ import java.io.FileOutputStream
 import kotlin.math.abs
 
 /**
- * v0.7.1: the list picker morphs out of and back into the glass list pill. Real HomeScreen,
+ * v0.9 (was v0.7.1's list-pill morph): the lists panel morphs out of and back into the round glass
+ * lists button at the bottom left, and settles ABOVE it, anchored bottom-left. Real HomeScreen,
  * paused clock, one 16 ms frame at a time, every frame drawn (captured), with the panel host's
  * draw-phase probe reporting the capsule rect, corner and content alpha.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [36], qualifiers = "w411dp-h891dp-420dpi", application = Application::class)
-class ListPillMorphTest {
+class ListsPanelMorphTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
     private val ctx: Application = ApplicationProvider.getApplicationContext()
     private val db = TodoDatabase.inMemory(ctx)
@@ -78,7 +79,7 @@ class ListPillMorphTest {
         rule.waitForIdle()
     }
 
-    private fun pillBounds(): Rect = rule.onNodeWithTag("list-pill", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+    private fun pillBounds(): Rect = rule.onNodeWithTag("lists-button", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
 
     // Last values the draw phase reported (a layer that did not change is not re-drawn, so keep them).
     private var rect: Rect? = null; private var corner = 0f; private var content = 0f; private var p = 0f
@@ -107,10 +108,7 @@ class ListPillMorphTest {
     }
 
     private fun open() = record({
-        rule.onNode(
-            androidx.compose.ui.test.hasClickAction() and androidx.compose.ui.test.hasAnyChild(androidx.compose.ui.test.hasTestTag("list-pill")),
-            useUnmergedTree = true,
-        ).performSemanticsAction(SemanticsActions.OnClick)
+        rule.onNodeWithTag("lists-button").performSemanticsAction(SemanticsActions.OnClick)
     }) { it.rect != null && it.p >= 1f && it.content >= 1f }
 
     /** Close: the scrim's semantics click (same as a tap outside). Done = the first frame with no capsule. */
@@ -144,16 +142,25 @@ class ListPillMorphTest {
 
     private fun ms(frames: Int) = frames * 16
 
-    @Test fun morphOpensFromAndLandsOnThePill() {
+    @Test fun morphOpensFromAndLandsOnTheListsButton() {
         start(null)
         val pill = pillBounds()
         val (opening, openDone) = open()
-        filmstrip("list-picker-open-filmstrip", opening.take(openDone + 1), pill)
+        filmstrip("lists-panel-open-filmstrip", opening.take(openDone + 1), pill)
+        val settledPanel = opening[openDone].rect!!
+        val screenH = rule.onRoot().fetchSemanticsNode().boundsInRoot.height
         rule.mainClock.advanceTimeBy(500)
         val (closing, closeDone) = closePanel()
-        filmstrip("list-picker-close-filmstrip", closing.take(closeDone + 1), pill)
+        filmstrip("lists-panel-close-filmstrip", closing.take(closeDone + 1), pill)
 
         val fails = ArrayList<String>()
+        // v0.9 placement: above the button (its bottom 8..12 dp over the button's top), anchored
+        // bottom-left (left edge on the button's left), at most 60 % of the screen tall.
+        val gapDp = (pill.top - settledPanel.bottom) / density
+        if (gapDp !in 8f..12f) fails += "panel bottom ${settledPanel.bottom} not 8..12 dp above the button top ${pill.top} (gap $gapDp dp)"
+        if (abs(settledPanel.left - pill.left) > halfDp) fails += "panel left ${settledPanel.left} != button left ${pill.left}"
+        if (settledPanel.height > 0.6f * screenH + 1f) fails += "panel ${settledPanel.height} px taller than 60 % of ${screenH}"
+        if (settledPanel.width / density > 360.5f) fails += "panel wider than 360 dp"
         // OPEN: no frame where neither is drawn; first capsule frame sits exactly on the pill; the
         // pill is hidden from that frame on; content waits for 40 % of the geometry.
         opening.forEachIndexed { i, f -> if (f.rect == null && f.pill < 1f) fails += "open frame $i: neither pill nor capsule" }
@@ -183,13 +190,14 @@ class ListPillMorphTest {
         val prevDiff = diff(closing[lastCap - 1].bmp, settled, pillPad)
         if (landDiff > 3f) fails += "landing frame differs from the settled pill by $landDiff"
 
+        println("PANEL settled $settledPanel (gap ${"%.1f".format(gapDp)} dp, ${"%.0f".format(100 * settledPanel.height / screenH)} % of the screen)")
         println("MORPH open: settle ${ms(openDone + 1)} ms (${openDone + 1} frames), first capsule frame $first, content starts frame ${opening.indexOfFirst { it.content > 0f }}")
         println("MORPH close: last capsule frame $lastCap (${ms(lastCap + 1)} ms), host gone frame $closeDone, content 0 at frame $contentGone (${ms(contentGone + 1)} ms), landing err ${"%.3f".format(landErr / density)} dp, landing vs settled diff $landDiff, previous frame diff $prevDiff")
         assertTrue(fails.joinToString("\n"), fails.isEmpty())
-        File(dir, "list-picker-morph-after.txt").writeText("open ${ms(openDone + 1)}\nclose ${ms(lastCap + 1)}\n")
+        File(dir, "lists-panel-morph-after.txt").writeText("open ${ms(openDone + 1)}\nclose ${ms(lastCap + 1)}\n")
     }
 
-    /** Timing of the v0.7.0 picker (task-panel style + Smooth spring), for the before/after comparison. */
+    /** Timing with the v0.7.0 task-panel style (Smooth spring), for the before/after comparison. */
     @Test fun beforeTiming() {
         start(PanelStyle.Card)
         val (_, openDone) = open()
@@ -197,6 +205,6 @@ class ListPillMorphTest {
         val (closing, closeDone) = closePanel()
         val lastCap = closing.indexOfLast { it.rect != null }
         println("BEFORE open: settle ${ms(openDone + 1)} ms; close: last capsule frame ${ms(lastCap + 1)} ms (host gone frame $closeDone)")
-        File(dir, "list-picker-morph-before.txt").writeText("open ${ms(openDone + 1)}\nclose ${ms(lastCap + 1)}\n")
+        File(dir, "lists-panel-morph-before.txt").writeText("open ${ms(openDone + 1)}\nclose ${ms(lastCap + 1)}\n")
     }
 }

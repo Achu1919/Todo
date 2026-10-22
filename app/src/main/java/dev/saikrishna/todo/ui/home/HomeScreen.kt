@@ -102,6 +102,7 @@ import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.LocalDate
 import dev.saikrishna.todo.domain.PlanLine
+import dev.saikrishna.todo.ui.components.GlassLevel
 import androidx.compose.foundation.layout.ime
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -553,6 +554,7 @@ fun HomeScreen(
             bareAnchors = setOf(MenuIds.ADD_MENU),
             ghost = { id -> if (id == MenuIds.LIST_PICKER) ListsButtonContent(chip) },
             above = setOf(MenuIds.LIST_PICKER),
+            anchorLevels = mapOf(MenuIds.LIST_PICKER to GlassLevel.Mid),
         ) { id ->
             when (id) {
                 MenuIds.LIST_PICKER -> ListsPanelContent(

@@ -8,6 +8,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
@@ -76,6 +77,9 @@ class OrgScreenshotTest {
                 Subtask(0, 4, "Charger", true, 1),
             ),
         )
+        // v0.9 lists panel: a saved view section and an overdue task for the plan summary.
+        org.insertView(dev.saikrishna.todo.data.SavedView(name = "Work this week", query = "", filter = "", position = 1))
+        db.taskDao().insertAll(listOf(Task(id = 8, title = "Renew the passport", createdAt = 8, dueDay = d - 1, listId = p, sortOrder = 8)))
     }
 
     private lateinit var vm: TodoViewModel
@@ -108,9 +112,10 @@ class OrgScreenshotTest {
 
     private fun rows(name: String, dark: Boolean) { start(dark); capture(name) }
 
+    /** v0.9 lists panel, grown out of the bottom-left lists button. */
     private fun picker(name: String, dark: Boolean) {
         start(dark)
-        rule.onNodeWithText("All lists").performSemanticsAction(SemanticsActions.OnClick)
+        rule.onNodeWithTag("lists-button").performSemanticsAction(SemanticsActions.OnClick)
         settle()
         capture(name)
     }
@@ -148,21 +153,47 @@ class OrgScreenshotTest {
         rule.waitUntil(5_000) { runBlocking { db.taskDao().get(4)!!.sortOrder != 4L } }
     }
 
-    /** v0.7.1 glass list pill, top of Home (cropped to the header so the pill reads at full size). */
-    private fun pill(name: String, dark: Boolean, focus: FocusMode = FocusMode.Off) {
-        start(dark, focus)
+    private fun crop(name: String, fromDp: Int?, heightDp: Int) {
         val file = File(dir, "$name.png")
         rule.onRoot().captureRoboImage(file.absolutePath)
         val img = javax.imageio.ImageIO.read(file)
-        javax.imageio.ImageIO.write(img.getSubimage(0, 0, img.width, (240 * 420 / 160).coerceAtMost(img.height)), "png", file)
+        val h = (heightDp * 420 / 160).coerceAtMost(img.height)
+        val y = if (fromDp == null) img.height - h else fromDp * 420 / 160
+        javax.imageio.ImageIO.write(img.getSubimage(0, y, img.width, h), "png", file)
     }
 
-    @Test fun homeListPillLight() = pill("home-list-pill-light", false)
-    @Test fun homeListPillDark() = pill("home-list-pill-dark", true)
-    @Test fun homeListPillFocusLight() = pill("home-list-pill-focus-light", false, FocusMode.Work)
-    @Test fun homeListPillFocusDark() = pill("home-list-pill-focus-dark", true, FocusMode.Work)
-    @Test fun listPickerLight() = picker("list-picker-light", false)
-    @Test fun listPickerDark() = picker("list-picker-dark", true)
+    /** v0.9 header: search + the centred page pill only (cropped to the top). */
+    private fun header(name: String, dark: Boolean) { start(dark); crop(name, 0, 240) }
+
+    /** v0.9 bottom row: lists button + composer (cropped to the bottom); optionally a list selected. */
+    private fun bottomRow(name: String, dark: Boolean, focus: FocusMode = FocusMode.Off, list: Long? = null) {
+        start(dark, focus)
+        if (list != null) { rule.runOnUiThread { vm.selectList(list) }; settle() }
+        crop(name, null, 200)
+    }
+
+    /** v0.9 collapsed pair (lists button + 120 dp add pill), cropped to the bottom. */
+    private fun collapsedPair(name: String, dark: Boolean) {
+        start(dark)
+        rule.runOnUiThread { dev.saikrishna.todo.ui.home.HomeTestHooks.chrome!!.collapseForTest() }
+        settle()
+        crop(name, null, 200)
+    }
+
+    @Test fun homeHeaderLight() = header("home-header-light", false)
+    @Test fun homeHeaderDark() = header("home-header-dark", true)
+    @Test fun homeBottomRowLight() = bottomRow("home-bottom-row-light", false)
+    @Test fun homeBottomRowDark() = bottomRow("home-bottom-row-dark", true)
+    @Test fun homeBottomRowListLight() = bottomRow("home-bottom-row-list-light", false, list = TaskList.WORK)
+    @Test fun homeBottomRowListDark() = bottomRow("home-bottom-row-list-dark", true, list = TaskList.WORK)
+    @Test fun homeBottomRowFocusLight() = bottomRow("home-bottom-row-focus-light", false, FocusMode.Work)
+    @Test fun homeBottomRowFocusDark() = bottomRow("home-bottom-row-focus-dark", true, FocusMode.Work)
+    @Test fun homePairCollapsedLight() = collapsedPair("home-pair-collapsed-light", false)
+    @Test fun homePairCollapsedDark() = collapsedPair("home-pair-collapsed-dark", true)
+    @Test fun homeV09Light() = rows("home-v09-light", false)
+    @Test fun homeV09Dark() = rows("home-v09-dark", true)
+    @Test fun listsPanelLight() = picker("lists-panel-light", false)
+    @Test fun listsPanelDark() = picker("lists-panel-dark", true)
     @Test fun rowsTagsProgressLight() = rows("rows-tags-progress-light", false)
     @Test fun rowsTagsProgressDark() = rows("rows-tags-progress-dark", true)
     @Test fun panelSubtasksTagsLight() = panel("panel-subtasks-tags-light", false)
