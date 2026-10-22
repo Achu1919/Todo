@@ -144,6 +144,8 @@ object Depth {
     val ChromeBlur = 16.dp
     /** v0.7.2: the composer's frosted glass (stronger than the header edge). */
     val FrostBlur = 26.dp
+    /** v0.11: the heavy frost behind the search morph (constant radius; only its alpha animates). */
+    val SearchBlur = 30.dp
     /** v0.7.2: list content fades over this height above the composer top. */
     val BottomFade = 36.dp
     /** …down to this opacity behind the composer (rows still hinted through the frost). */

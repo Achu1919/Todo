@@ -56,7 +56,7 @@ import dev.saikrishna.todo.ui.motion.ProvideHaptics
 import dev.saikrishna.todo.ui.motion.ProvideMotion
 import dev.saikrishna.todo.ui.plan.PlanScreen
 import dev.saikrishna.todo.ui.plan.PlanTestHooks
-import dev.saikrishna.todo.ui.search.SearchScreen
+import dev.saikrishna.todo.ui.search.SearchTestHooks
 import dev.saikrishna.todo.ui.theme.AppTheme
 import dev.saikrishna.todo.widget.TodayWidgetContent
 import dev.saikrishna.todo.widget.WidgetData
@@ -263,11 +263,14 @@ class V08ScreenshotTest {
         val vm = seedPlan()
         runBlocking { TaskRepository(db).saveView("Overdue work", "", ViewFilter(due = DueFilter.Overdue).encode()) }
         vm.setSearchFilter(SearchFilter(ViewFilter(due = DueFilter.Today, status = StatusFilter.Open)))
-        themed(dark) { SearchScreen(vm, onBack = {}) }
+        // v0.11: search is the in-place morph over Home (opened pre-filtered, as from a tag pill).
+        themed(dark) { dev.saikrishna.todo.ui.home.HomeScreen(vm, onOpenSearch = {}, onOpenSettings = {}) }
         rule.waitUntil(10_000) { vm.tasks.value != null }
         rule.mainClock.advanceTimeBy(1_500); rule.waitForIdle()
+        rule.runOnIdle { SearchTestHooks.morph!!.prefiltered = true; SearchTestHooks.morph!!.open() }
+        rule.mainClock.advanceTimeBy(1_500); rule.waitForIdle()
         rule.onNodeWithText("Overdue work").assertIsDisplayed()
-        rule.onNodeWithText("Team sync notes").assertIsDisplayed()
+        rule.onNode(androidx.compose.ui.test.hasText("Team sync notes") and androidx.compose.ui.test.hasAnyAncestor(androidx.compose.ui.test.hasTestTag("search-results"))).assertIsDisplayed()
         save("search-filters-${if (dark) "dark" else "light"}", root())
     }
 

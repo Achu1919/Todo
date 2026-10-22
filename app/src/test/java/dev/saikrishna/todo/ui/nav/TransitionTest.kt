@@ -207,11 +207,6 @@ class TransitionTest {
             "first pop frame ${"%.1f".format(run.firstFrameMs)} ms (Robolectric wall time)"
     }
 
-    /**
-     * Search has content that legitimately keeps moving after the slide settles: the field
-     * autofocuses (cursor) and the "Search" hint finishes its own rise ~160 ms later. Its top three
-     * eighths are therefore excluded from the push end-state comparison (pops are checked in full).
-     */
     private fun pushCheck(name: String, run: Run, settled: Bitmap, skipTopRows: Int = 0): String {
         val black = run.frames.map(::blackRows)
         check(black.count { it > 0 } == 0, "$name: frames with a black band in the top 10 % (rows per frame $black)")
@@ -233,7 +228,7 @@ class TransitionTest {
             else rule.onNodeWithContentDescription(screen).performSemanticsAction(SemanticsActions.OnClick)
         })
         val pushed = settled()
-        report.appendLine(pushCheck("push-$screen", pushRun, pushed, skipTopRows = if (screen == "Search") 3 else 0))
+        report.appendLine(pushCheck("push-$screen", pushRun, pushed))
         filmstrip("transition-push-${screen.lowercase()}", pushRun.frames)
 
         val popRun = if (!viaGesture) {
@@ -316,8 +311,7 @@ class TransitionTest {
 
     @Test fun settingsArrow() = cycle("Settings", viaGesture = false)
     @Test fun settingsGesture() = cycle("Settings", viaGesture = true)
-    @Test fun searchArrow() = cycle("Search", viaGesture = false)
-    @Test fun searchGesture() = cycle("Search", viaGesture = true)
+    // v0.11: Search is no longer a pushed screen (in-place morph: SearchMorphTest).
 
     /** v0.9: Settings lives in the lists panel (bottom-left lists button), no longer in the header. */
     private fun openListsPanel() {

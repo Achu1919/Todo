@@ -674,6 +674,101 @@ Local git: one commit per step (`git log`): baseline 0.7.4, domain + schema 5, U
 ### Risks
 - ColorOS can defer or kill background jobs ("auto launch" off, strict battery optimisation). Glance renders through WorkManager, so updates may lag until Todo is opened once. Logcat tag `TodoWidget` (plus `WM-` and `GlanceAppWidget`) shows failures.
 
+## Milestone 11 (v0.11.0, code 20): in-place search morph
+
+The pushed Search screen is gone. Search is now a morph on Home, and Home stays composed throughout. The technique was modelled on a reference recording Sai provided; the code and visuals are our own, with no third-party assets.
+
+### Files
+- `ui/search/SearchMorph.kt`: `SearchMorph` state class, `SearchPhase` with the pure `searchPhase(target, progress)`, and `SearchTestHooks`.
+- `ui/search/SearchOverlay.kt`: the overlay, plus the chip helpers, `suggestViewName` and `searchTasks` moved from the deleted `SearchScreen.kt`.
+- `Screen.Search` is removed from `AppNav`. The back-stack saver skips names it doesn't know, so an older saved "Search" entry restores to Home.
+
+### Motion
+- One `progress` value (0 = header circle, 1 = docked pill) drives everything. It is read only in layout and draw lambdas, so Home doesn't recompose while it moves.
+- Spring: `Springs.Smooth` (response 0.5 s, damping 1.0, critically damped), so there is no overshoot. `open()` and `close()` retarget the same Animatable mid-flight and keep its velocity.
+- **Pill flight:** its rect is lerped from the header circle's bounds (captured at rest) to the dock: full width minus `Spacing.screen` on each side, 48 dp tall, 10 dp above max(IME, nav bar).
+  - Shape is `Shapes.full`, so the ends stay round throughout.
+  - The header circle is hidden while the pill stands in for it.
+  - The magnifier slides from the centre to 14 dp from the left edge.
+  - The field keeps its final width and is clipped by the pill, so it never reflows.
+  - The "Search" hint and a 34 dp light round close button fade in over k 0.45 → 1.
+- **Rest of Home:**
+  - Header: fades (smoothstep over k/0.7) and lifts 14 dp.
+  - Lists button + composer: fade over k/0.6.
+  - List page: drifts down 20 dp and dims to 65 %, on the page's existing ModulateAlpha layer. A new layer outside `bottomFade`'s offscreen layer blanked the list for one frame, so it isn't used.
+  - Home layers get `clearAndSetSemantics` while search is active.
+- **Frost:** `Modifier.searchFrost` in `Glass.kt` is a full-screen Haze blur of the content source.
+  - New token `Depth.SearchBlur` = 30 dp, a constant radius; only its alpha follows k.
+  - Paper tint 52 % light / 60 % dark.
+  - Reduced motion or no source: flat paper scrim at 90 %.
+- **Empty state:** "Search your tasks" with an icon, centred and faint. It rises 12 dp and scales 0.94 → 1 over k 0.5 → 1.
+- **Chips and results:**
+  - Chips sit just above the pill and fade in after k 0.8, so the pill lands first.
+  - There are two rows: saved views (plus Save view / Delete view), then one merged filter row (lists, tags, status, due, priority, reminder, recurring).
+  - Results use a `LazyColumn` with `reverseLayout`, so the first result (open tasks oldest first, then done newest first) sits right above the chips.
+- **Reduced motion:** the same progress runs on a 200 ms tween. The pill stays at the dock and fades in while the circle fades out. No travel, drift or lift.
+- **Haptics:** a tick on open and on close.
+
+### Keyboard
+- The pill node is laid out from the **live** IME inset every frame; it is a tiny node.
+- The results region (list, chips, empty state) is laid out from `WindowInsets.imeAnimationTarget`. It moves in the draw phase by `dock(target) − dock(live)`, so it is laid out once per keyboard animation, not once per frame. `SearchTestHooks.resultsLayouts` counts these layouts.
+- The composer gets `followIme = false` while search is active, so Home doesn't re-measure for the search keyboard.
+- Focus: the field autofocuses one frame after `open()`, unless search was opened pre-filtered (tag pill or saved view), where the results are the point. On close start: `clearFocus(force)` and `keyboard.hide()`. Once fully closed: the overlay leaves composition (query gone) and `setSearchFilter(SearchFilter())`.
+
+### Entry and exit
+- **Entry points:** every entry goes through `openSearch(pre)`, which sets the filter, marks it pre-filtered, closes menus, dismisses the composer chrome and calls `open()`.
+  - Header circle.
+  - Row tag pill.
+  - Task panel tag pill.
+  - Saved view in the lists panel (brings its query text).
+- **Exit points:**
+  - The x button.
+  - Tapping the frost: the overlay root is a shield. It is hit for every touch over Home, and a tap on it closes search. Rows and chips consume their own taps.
+  - System back.
+  - Predictive back: the morph scrubs back up to 30 % with the gesture. Cancelling springs it back open; committing closes it.
+  - Tapping a result closes search and then opens the task panel.
+  - A notification open request closes search, then waits for `homeOnTop() && !search.active` before opening the panel.
+
+### Tests
+- **`ui/search/SearchMorphTest` (13 tests):**
+  - phase table;
+  - open/close state machine (phases, counters, autofocus, Home not re-created);
+  - typing filters title + notes, then tap → task panel;
+  - row tag opens pre-filtered with no autofocus;
+  - saved view from the lists panel brings its query;
+  - shield: a tap where a row sits leaves `rowInput` unchanged and closes search;
+  - system back;
+  - predictive back scrub / cancel / commit;
+  - notification open request closes search and opens the panel;
+  - no overshoot: k is monotonic and within [0, 1], and every pill edge is monotonic per 16 ms frame, open and close;
+  - interruption both ways;
+  - IME tracking: with a fake IME, the pill's bottom equals H − IME − 10 dp within 1 px on every frame up and down. The chips stay docked 8 dp above the pill within 1.5 px, and `resultsLayouts` doesn't change during the animation;
+  - reduced motion: no travel, done in ≤ 250 ms.
+- **Updated tests:**
+  - `TransitionTest`: the search push/pop cycles are gone.
+  - `NotificationOpenTest.fromSearch`: now uses the morph.
+  - `ListsPanelTest`: a saved view opens the morph and back closes it.
+  - `V08ScreenshotTest.searchShot`: now the morph over Home.
+- **Shots (`V11ScreenshotTest`, 5):** `out/shots/`:
+  - `search-open-filmstrip-{light,dark}.png`;
+  - `search-close-filmstrip-{light,dark}.png` (40 ms steps);
+  - `search-open-{light,dark}.png`;
+  - `search-reduced-filmstrip.png` (open then close, 32 ms steps);
+  - `search-results-{light,dark}.png` (query "b" with a simulated 300 dp keyboard painted in).
+- **Verification:**
+  - unit tests `--rerun`: **241 pass** (230 − 2 removed search transition cycles + 13 new);
+  - touched shots: V08 search ×2 and V11 ×5 pass;
+  - `todo-release.apk` **5,761,323 bytes**, also at `../todo-v0.11.0.apk`;
+  - apksigner OK (V2, Android Debug); aapt2 versionCode 20 / 0.11.0, label "Todo";
+  - `verify_release.py` OK.
+  - No DB schema change (Room 5).
+
+### Needs a device
+- Real IME animation tracking: Robolectric uses a fake inset.
+- Cost of the full-screen 30 dp Haze blur while the morph and keyboard run.
+- Feel of the predictive-back scrub.
+- Hit-testing near the pill while it flies.
+
 ## Milestone 10.1 (v0.10.1, code 19): icon A, duller white
 
 Sai picked icon A (kept; `res/values/icon.xml` stays on `icon_a_`) and asked for a less glaring white.

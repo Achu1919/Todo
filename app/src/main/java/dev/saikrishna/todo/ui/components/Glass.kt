@@ -231,6 +231,32 @@ fun Modifier.glassBlurFill(tint: Color = AppTheme.colors.glassTint, fallback: Co
 const val FrostSaturation = 1.15f
 
 /**
+ * v0.11 search frost: the heavy full-screen blur behind the search morph. Constant radius
+ * ([Depth.SearchBlur]); the caller fades it with graphicsLayer alpha (never animates the radius).
+ * Frozen / reduced motion / no source: a flat paper scrim instead.
+ */
+@Composable
+fun Modifier.searchFrost(state: HazeState?): Modifier {
+    val c = AppTheme.colors
+    val reduced = LocalReducedMotion.current
+    val frozen = LocalBlurFrozen.current
+    val scrim = c.paper.copy(alpha = 0.90f)
+    if (state == null || reduced) return this.drawWithCache { onDrawBehind { drawRect(scrim) } }
+    val tint = c.paper.copy(alpha = if (c.isDark) 0.60f else 0.52f)
+    val style = remember(tint, scrim, frozen) {
+        HazeBlurStyle {
+            blurEnabled(!frozen)
+            blurRadius(Depth.SearchBlur)
+            noiseFactor(0f)
+            colorEffects(listOf(HazeColorEffect.tint(tint)))
+            fallbackColorEffect(HazeColorEffect.tint(scrim))
+        }
+    }
+    val input = remember(state) { HazeInput.Sources(state) }
+    return this.hazeBlur(input, style = style, performanceMode = HazePerformanceMode.Performance)
+}
+
+/**
  * v0.7.2: the list sinks away above the composer. Content keeps full opacity down to
  * [Depth.BottomFade] above the edge, then an eased (smoothstep, C¹) fall to [floor] exactly at
  * the edge, and [floor] below it. [edgeFromBottom] is read in the DRAW phase (the composer's

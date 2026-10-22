@@ -158,6 +158,8 @@ fun Composer(
      * pair's centre never moves.
      */
     leading: (@Composable () -> Unit)? = null,
+    /** v0.11: false while the search morph owns the keyboard (Home must not relayout per IME frame). */
+    followIme: Boolean = true,
 ) {
     val c = AppTheme.colors
     val type = AppTheme.type
@@ -341,7 +343,7 @@ fun Composer(
         Column(
             Modifier
                 .fillMaxWidth()
-                .imePadding()
+                .then(if (followIme) Modifier.imePadding() else Modifier)
                 .navigationBarsPadding()
                 // Narrower than the cards and floating (reference proportions: ~48 dp capsule, wide side margins).
                 .padding(top = 6.dp, bottom = 10.dp),

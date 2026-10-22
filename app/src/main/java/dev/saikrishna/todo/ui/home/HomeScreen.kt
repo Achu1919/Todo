@@ -1,5 +1,14 @@
 package dev.saikrishna.todo.ui.home
 
+import dev.saikrishna.todo.ui.search.SearchTestHooks
+import dev.saikrishna.todo.ui.search.SearchOverlay
+import dev.saikrishna.todo.ui.search.SearchMorph
+import dev.saikrishna.todo.ui.components.smoothstep
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalFocusManager
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -231,11 +240,39 @@ fun HomeScreen(
     var menu by rememberSaveable { mutableStateOf<Long?>(null) }
 
     val homeOnTop by rememberUpdatedState(isTop)
+    // ---- v0.11 in-place search morph (replaces the pushed Search screen; Home stays composed) ----
+    val search = remember { SearchMorph(scope) }
+    search.reduced = reduced
+    val searchActive by remember { derivedStateOf { search.active } }
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    DisposableEffect(search) {
+        SearchTestHooks.morph = search
+        search.onOpenStart = { haptics.tick() }
+        search.onCloseStart = {
+            haptics.tick()
+            focusManager.clearFocus(force = true)
+            keyboard?.hide()
+        }
+        // The pre-filter belongs to one visit only.
+        search.onClosed = { vm.setSearchFilter(SearchFilter()) }
+        onDispose { if (SearchTestHooks.morph === search) SearchTestHooks.morph = null }
+    }
+    PredictiveBackHandler(enabled = search.target) { events ->
+        try {
+            events.collect { e -> search.backProgress(e.progress) }
+            search.close()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            search.backCancelled()
+            throw e
+        }
+    }
     LaunchedEffect(openRequest) {
         val id = openRequest ?: return@LaunchedEffect
-        // A reminder tapped while Settings/Search is open: AppNav pops back first (same pop as the
-        // back arrow); the panel opens once Home is the top screen again.
-        snapshotFlow { homeOnTop() }.first { it }
+        // A reminder tapped while Settings is open: AppNav pops back first (same pop as the back
+        // arrow); with search open, the morph closes. The panel opens once Home is visible again.
+        search.close()
+        snapshotFlow { homeOnTop() && !search.active }.first { it }
         menu = null
         // A task in a list hidden by the current selection/focus: show all lists so its card exists.
         val t = vm.tasks.value?.firstOrNull { it.id == id }
@@ -298,6 +335,15 @@ fun HomeScreen(
     // ---- v0.7.3: composer collapses to a centred pill while scrolling down ---------------------
     val density = LocalDensity.current
     val chrome = remember { with(density) { ComposerChrome(28.dp.toPx(), 16.dp.toPx()) } }
+    /** Every search entry point: optional pre-filter, then the morph (never a pushed screen). */
+    fun openSearch(pre: SearchFilter? = null) {
+        if (pre != null) vm.setSearchFilter(pre)
+        search.prefiltered = vm.searchFilter.value != SearchFilter()
+        menu = null
+        chrome.dismiss()
+        onOpenSearch()
+        search.open()
+    }
     // v0.9 lists button. While typing, a tap first dismisses editing (keyboard down, composer
     // unfocused), waits for the keyboard to finish leaving (max 600 ms) and one frame, then opens
     // the panel, so it grows from the button's resting place and never fights the IME animation.
@@ -359,7 +405,7 @@ fun HomeScreen(
             },
             anchors = anchors,
             onDrop = { outcome, id -> vm.applyDrop(outcome, id) },
-            onTag = { tag -> vm.setSearchFilter(SearchFilter(tag)); onOpenSearch() },
+            onTag = { tag -> openSearch(SearchFilter(tag)) },
             onDragging = { if (it) HomeTestHooks.rowInput++; draggingRow = it },
         )
     }
@@ -405,7 +451,8 @@ fun HomeScreen(
                     val composerEdge = with(LocalDensity.current) { 6.dp.toPx() }
                     AnimatedContent(
                         // Rows fade out over 36 dp above the composer (or undo bar) top.
-                        modifier = Modifier.bottomFade({ bottomPx.intValue - composerEdge }, collapse = { chrome.progress.value }),
+                        modifier = Modifier
+                            .bottomFade({ bottomPx.intValue - composerEdge }, collapse = { chrome.progress.value }),
                         targetState = filter,
                         transitionSpec = {
                             val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
@@ -439,7 +486,11 @@ fun HomeScreen(
                             heading = headingFor(page, today),
                             caption = captionFor(page, pages),
                             modifier = Modifier.graphicsLayer {
-                                alpha = fade
+                                // v0.11: the page also drifts down a touch and dims under the search
+                                // frost (same layer, so no extra offscreen buffer).
+                                val k = search.k.coerceIn(0f, 1f)
+                                alpha = fade * (1f - 0.35f * k)
+                                if (!reduced) translationY = SearchDrift.toPx() * k
                                 compositingStrategy = CompositingStrategy.ModulateAlpha
                             },
                         )
@@ -449,7 +500,11 @@ fun HomeScreen(
                 HomeHeader(
                     filter = filter,
                     onFilter = { chrome.dismiss(); filter = it },
-                    onOpenSearch = onOpenSearch,
+                    onOpenSearch = { openSearch() },
+                    searchCircle = Modifier
+                        .onGloballyPositioned { if (!search.active) search.circle = it.boundsInRoot() }
+                        // The pill takes over the circle's place (reduced motion: it crossfades).
+                        .graphicsLayer { if (!reduced && search.active) alpha = 0f },
                     themeButton = {
                         ThemeToggleButton(
                             dark = darkNow,
@@ -462,7 +517,13 @@ fun HomeScreen(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .onSizeChanged { topPx.intValue = it.height }
-                        .launchEntrance(launch, LaunchEntrance.Slot.Header),
+                        .launchEntrance(launch, LaunchEntrance.Slot.Header)
+                        .graphicsLayer {
+                            val k = search.k.coerceIn(0f, 1f)
+                            alpha = 1f - smoothstep(k / 0.7f)
+                            if (!reduced) translationY = -SearchHeaderLift.toPx() * k
+                        }
+                        .then(if (searchActive) Modifier.clearAndSetSemantics { } else Modifier),
                 )
 
                 Column(
@@ -470,7 +531,9 @@ fun HomeScreen(
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .onSizeChanged { bottomPx.intValue = it.height }
-                        .launchEntrance(launch, LaunchEntrance.Slot.Bottom),
+                        .launchEntrance(launch, LaunchEntrance.Slot.Bottom)
+                        .graphicsLayer { alpha = 1f - smoothstep(search.k.coerceIn(0f, 1f) / 0.6f) }
+                        .then(if (searchActive) Modifier.clearAndSetSemantics { } else Modifier),
                 ) {
                     UndoBar(
                         event = undo,
@@ -486,6 +549,7 @@ fun HomeScreen(
                         onOptions = { menu = MenuIds.ADD_MENU },
                         optionsAnchor = Modifier.panelAnchor(menuAnchors, MenuIds.ADD_MENU),
                         chrome = chrome,
+                        followIme = !searchActive,
                         // v0.9: the lists button, left of the composer (pairs with the pill when collapsed).
                         leading = {
                             ListsButton(
@@ -552,8 +616,7 @@ fun HomeScreen(
                         onSaveAsTemplate = { vm.saveAsTemplate(task, today) },
                         onTag = { tag ->
                             panelTaskId = null
-                            vm.setSearchFilter(SearchFilter(tag))
-                            onOpenSearch()
+                            openSearch(SearchFilter(tag))
                         },
                         onSaveText = { t, n -> vm.setText(task.id, t, n) },
                         onSetDueAt = { day, minute ->
@@ -611,9 +674,7 @@ fun HomeScreen(
                     onFocus = { vm.setFocus(it) },
                     onNewList = { menu = null; onOpenLists() },
                     onView = { v ->
-                        menu = null
-                        vm.setSearchFilter(SearchFilter(dev.saikrishna.todo.domain.ViewFilter.decode(v.filter), query = v.query))
-                        onOpenSearch()
+                        openSearch(SearchFilter(dev.saikrishna.todo.domain.ViewFilter.decode(v.filter), query = v.query))
                     },
                     onSettings = { menu = null; onOpenSettings() },
                 )
@@ -635,8 +696,18 @@ fun HomeScreen(
                 )
             }
         }
+
+        // v0.11: the search morph over everything (its frost blurs the list content).
+        SearchOverlay(vm, search, hazeState, onOpenTask = { id ->
+            search.close()
+            vm.requestOpen(id)
+        })
     }
 }
+
+/** v0.11 search morph: how far the list drifts down and the header lifts as search opens. */
+private val SearchDrift = 20.dp
+private val SearchHeaderLift = 14.dp
 
 /**
  * Floating header (reference study): no bar, just a glass search circle and the centred pill over the
@@ -648,6 +719,7 @@ private fun HomeHeader(
     filter: Filter,
     onFilter: (Filter) -> Unit,
     onOpenSearch: () -> Unit,
+    searchCircle: Modifier,
     themeButton: @Composable BoxScope.() -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -655,7 +727,7 @@ private fun HomeHeader(
     Box(modifier.fillMaxWidth()) {
         // Blurred, tinted edge behind the controls, fading out (eased) by 30 dp below them.
         GlassEdgeTop(solidHeight = statusTop + HeaderTop + PillSpec.Height)
-        HeaderControls(filter, onFilter, onOpenSearch, themeButton)
+        HeaderControls(filter, onFilter, onOpenSearch, searchCircle, themeButton)
     }
 }
 
@@ -664,6 +736,7 @@ private fun HeaderControls(
     filter: Filter,
     onFilter: (Filter) -> Unit,
     onOpenSearch: () -> Unit,
+    searchCircle: Modifier,
     themeButton: @Composable BoxScope.() -> Unit,
 ) {
     // v0.9.1: the theme toggle mirrors search on the right (same 44 dp glass circle).
@@ -675,7 +748,7 @@ private fun HeaderControls(
             .statusBarsPadding()
             .padding(start = Spacing.screen, end = Spacing.screen, top = HeaderTop, bottom = 28.dp),
     ) {
-        CircleIconButton(AppIcons.Search, "Search", onOpenSearch, Modifier.align(Alignment.CenterStart), glass = true)
+        CircleIconButton(AppIcons.Search, "Search", onOpenSearch, Modifier.align(Alignment.CenterStart).then(searchCircle), glass = true)
         SegmentedPill(
             options = Filter.entries.toList(),
             selected = filter,

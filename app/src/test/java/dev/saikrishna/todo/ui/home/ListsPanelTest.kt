@@ -123,6 +123,11 @@ class ListsPanelTest {
         start()
         open(); click("New list"); assertFalse(isOpen())
         open(); click("Errands"); assertFalse(isOpen())
+        // v0.11: a saved view opens the in-place search morph (Home stays); back closes it.
+        assertTrue(rule.onAllNodes(hasTestTag("search-overlay")).fetchSemanticsNodes().isNotEmpty())
+        rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }
+        settle()
+        assertTrue(rule.onAllNodes(hasTestTag("search-overlay")).fetchSemanticsNodes().isEmpty())
         open(); click("Settings"); assertFalse(isOpen())
         assertEquals(listOf("lists", "search", "settings"), opened)
         open()

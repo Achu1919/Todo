@@ -45,7 +45,6 @@ import dev.saikrishna.todo.ui.home.TodoViewModel
 import dev.saikrishna.todo.ui.motion.LocalReducedMotion
 import dev.saikrishna.todo.ui.motion.Springs
 import dev.saikrishna.todo.ui.motion.Tweens
-import dev.saikrishna.todo.ui.search.SearchScreen
 import dev.saikrishna.todo.ui.settings.LicensesScreen
 import dev.saikrishna.todo.ui.settings.ListsScreen
 import dev.saikrishna.todo.ui.settings.TemplatesScreen
@@ -58,11 +57,16 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 /** Plain enum keys: saved by name. */
-enum class Screen { Home, Search, Settings, Licenses, Lists, Templates, Plan }
+/** v0.11: Search is no longer a screen (in-place morph on Home). */
+enum class Screen { Home, Settings, Licenses, Lists, Templates, Plan }
 
 private val BackStackSaver = listSaver<SnapshotStateList<Screen>, String>(
     save = { stack -> stack.map { it.name } },
-    restore = { names -> names.map(Screen::valueOf).toMutableStateList() },
+    // Names from an older build (v0.10 "Search") are skipped; Home always stays at the root.
+    restore = { names ->
+        names.mapNotNull { n -> Screen.entries.firstOrNull { it.name == n } }
+            .ifEmpty { listOf(Screen.Home) }.toMutableStateList()
+    },
 )
 
 /** Parallax of the screen underneath a push: it moves a quarter of the width, no scale. */
@@ -150,7 +154,7 @@ private class NavState(
 
     /**
      * v0.7: back to Home from any depth with the SAME pop (reminder tapped while Settings,
-     * Search or Licences is open). Screens between Home and the top are dropped without
+     * Settings or Licences is open). Screens between Home and the top are dropped without
      * animation (they are covered and not drawn), then the top slides out over Home.
      */
     fun popToRoot() {
@@ -271,14 +275,13 @@ fun AppNav(vm: TodoViewModel, modifier: Modifier = Modifier) {
                                 when (s) {
                                     Screen.Home -> HomeScreen(
                                         vm,
-                                        onOpenSearch = { nav.push(Screen.Search) },
+                                        onOpenSearch = {},
                                         onOpenSettings = { nav.push(Screen.Settings) },
                                         onOpenLists = { nav.push(Screen.Lists) },
                                         onOpenTemplates = { nav.push(Screen.Templates) },
                                         isTop = { stack.last() == Screen.Home && nav.exiting == null && !nav.moving },
                                         onOpenPlan = { nav.push(Screen.Plan) },
                                     )
-                                    Screen.Search -> SearchScreen(vm, onBack = nav::pop)
                                     Screen.Settings -> SettingsScreen(
                                         vm, onBack = nav::pop,
                                         onOpenLicenses = { nav.push(Screen.Licenses) },

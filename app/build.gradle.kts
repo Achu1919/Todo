@@ -20,8 +20,8 @@ android {
         applicationId = "dev.saikrishna.todo"
         minSdk = 33
         targetSdk = 37
-        versionCode = 19
-        versionName = "0.10.1"
+        versionCode = 20
+        versionName = "0.11.0"
 
         resValue("string", "app_name", appName)
         resValue("string", "capture_label", "Add to $appName")
