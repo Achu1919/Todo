@@ -56,6 +56,9 @@ class ComposerHintTest {
     private val now = LocalDateTime.of(2026, 10, 21, 10, 0) // Wednesday
     private val dir = File(System.getProperty("shots.dir") ?: "build/shots").apply { mkdirs() }
 
+    @org.junit.Before fun rotateOn() { ComposerHints.rotate = true }
+    @org.junit.After fun rotateOff() { ComposerHints.rotate = System.getProperty("todo.static.hints") != "true" }
+
     @Test fun everyExampleUsesSyntaxTheParserSupports() {
         val lists = TaskList.Defaults
         fun p(s: String) = QuickParse.parse(s, now, lists = lists)

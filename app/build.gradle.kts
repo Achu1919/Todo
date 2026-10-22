@@ -58,6 +58,8 @@ android {
         unitTests.all {
             it.systemProperty("roborazzi.test.record", "true")
             it.systemProperty("robolectric.pixelCopyRenderMode", "hardware")
+            // v0.10: hold the rotating composer hint still in frame-comparison tests.
+            it.systemProperty("todo.static.hints", "true")
             it.systemProperty("shots.dir", rootProject.layout.projectDirectory.dir("out/shots").asFile.absolutePath)
             it.maxHeapSize = "1536m"
             // Robolectric on JDK 21 needs these for SDK 36's FileDescriptor interceptor.

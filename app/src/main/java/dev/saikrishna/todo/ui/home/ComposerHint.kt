@@ -50,6 +50,11 @@ object ComposerHints {
     /** Index 0 is [Default]; 1..n are [Examples]. */
     val All = listOf(Default) + Examples
     const val IntervalMs = 3_500L
+    /**
+     * Unit tests that compare frames over several seconds run with the hint held still
+     * (`todo.static.hints`, set in app/build.gradle.kts); ComposerHintTest turns it back on.
+     */
+    var rotate: Boolean = System.getProperty("todo.static.hints") != "true"
     val Travel = 12.dp
 }
 
@@ -65,7 +70,7 @@ fun RotatingHint(active: Boolean, style: TextStyle, color: Color, modifier: Modi
     val reduced = LocalReducedMotion.current
     var index by rememberSaveable { mutableIntStateOf(0) }
     LaunchedEffect(active) {
-        if (!active) return@LaunchedEffect
+        if (!active || !ComposerHints.rotate) return@LaunchedEffect
         while (true) {
             delay(ComposerHints.IntervalMs)
             index = (index + 1) % ComposerHints.All.size
