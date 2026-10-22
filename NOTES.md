@@ -674,6 +674,77 @@ Local git: one commit per step (`git log`): baseline 0.7.4, domain + schema 5, U
 ### Risks
 - ColorOS can defer or kill background jobs ("auto launch" off, strict battery optimisation). Glance renders through WorkManager, so updates may lag until Todo is opened once. Logcat tag `TodoWidget` (plus `WM-` and `GlanceAppWidget`) shows failures.
 
+## Milestone 10 (v0.10.0, code 18): identity, backup/export, launch entrance, rotating hint
+
+### Identity
+- **App name, one place:** `val appName = "Todo"` at the top of `app/build.gradle.kts`. `resValue` generates `app_name` (launcher label), `capture_label` ("Add to Todo", share target), `tile_add_task` ("Add to Todo", QS tile label; the tile service reads the string), `widget_error` and `widget_load_failed`; `BuildConfig.APP_NAME` names the app in the backup error text. These were removed from `strings.xml`. Renaming = edit that one line + rebuild. Kept as they are: the widget's name "Today" (the picker already groups it under the app name) and the notification channels "Reminders" / "Plan your day" (they don't name the app).
+- **Icon:** our own vectors. **A** (shipped) is a soft-white filled check disc (like our checkbox) with an indigo check, on an indigo→soft-white diagonal gradient with a faint glow. **B** is a glass tile (translucent fill, light rim, top sheen) holding a soft white rounded check, on a deeper indigo dusk gradient. Each has a monochrome layer (A: ring + check, B: tile outline + check) for Android 13 themed icons. Files: `res/drawable/icon_{a,b}_{background,foreground,monochrome}.xml`.
+- **Switching** is in `res/values/icon.xml`: three drawable aliases (`ic_launcher_background/foreground/monochrome`). Change `icon_a_` to `icon_b_` on the three lines; the adaptive icon, splash and everything else follow. R8 resource shrinking drops the unused variant from the APK.
+- **Splash:** `windowSplashScreenBackground` = `@color/paper`, now the sky colour where the icon sits (light #CDD6E5, dark #1B2231; was the old off-white/near-black). The splash icon is the full icon (`splash_icon.xml` layer list), and the system masks it to a circle. The window background is `window_backdrop.xml`, a gradient close to the Compose sky, so nothing flashes before the first frame. The splash is held until settings **and** the first task list are read. It exits with a 180 ms fade, and the icon eases up to 1.06×. The launch entrance plays underneath.
+
+### Backup / export (Settings → Data)
+- **Format** (`data/Backup.kt`): one JSON object.
+  - Header: `format: "dev.saikrishna.todo.backup"`, `schema: 1`, `exportedAt`, `app`.
+  - Data: `tasks` (tags live on the task), `subtasks`, `lists`, `templates`, `views`, and `settings` (the DataStore prefs minus the per-device "asked for notifications").
+  - Field names are stable. Readers accept schema 1..`Schema`. A newer file is refused ("made by a newer version… update the app"). Missing sections read as empty. A section of the wrong type, a missing title, a non-positive or duplicate id, or bad JSON gives a plain message, and nothing is written.
+- **Export:** SAF `CreateDocument("application/json")`, default name `todo-backup-YYYY-MM-DD.json`. The row's subtitle then says "Saved: 42 tasks, 3 lists".
+- **Import:** SAF `OpenDocument`, size-capped at 20 MB, decoded off the main thread. It opens a glass sheet:
+  - Preview: "42 tasks, 3 lists", "32 open · 12 subtasks…", "Exported 14 Oct 2026 · app 0.10.0".
+  - **Merge** (primary): adds and updates, never deletes, and leaves settings alone.
+  - **Replace everything** (danger outline) goes to a confirm step with a red filled **Replace** button. That step states how many current tasks will be deleted.
+  - After that, a result or error step.
+- **Merge rules (dedupe by id):**
+  - Same id + same `createdAt` = the same task: updated if different, skipped if equal.
+  - Same id, different `createdAt` = a different task: inserted under a new id, and its subtasks follow.
+  - Lists match by id + name, or by name (case-insensitive). Templates and views match by name.
+- **Replace** clears all five tables and inserts the file. The built-in Personal/Work lists are always re-added, and tasks pointing at unknown lists go to Personal.
+- **Atomic:** the DB part is one Room `withTransaction`. Any exception rolls everything back (tested for both modes with an injected fault). Settings are written after the commit (DataStore is separate), on Replace only.
+- **After import:** `TodoApp.backup`'s hook calls `Reminders.rearm(before, after)`, which cancels alarms of tasks that are gone and re-arms every task now present, then refreshes the Today widget. (The app-wide reminder sync also follows the DB; the explicit call makes it immediate and testable.)
+- **Share open tasks:** a Markdown checklist grouped by list (`- [ ] Title (YYYY-MM-DD) #tags`) via the share sheet.
+- **Android Auto Backup:** `allowBackup` + `dataExtractionRules` (cloud + device transfer) + `fullBackupContent`.
+  - Included: `todo.db` + `todo.db-wal` and `datastore/settings.preferences_pb`.
+  - Not included: WorkManager's DB, Glance widget state (widget ids don't survive a restore), caches.
+  - No custom BackupAgent, so `verify_release.py` needs no new by-name class (still 42 checks).
+
+### Launch entrance (cold start only)
+- `ui/motion/LaunchEntrance.kt`. One clock (elapsed ms, linear 450 ms). Every element's value is the closed-form spring step response at `elapsed − delay`, applied in `graphicsLayer`: draw phase only, no recomposition per frame, layout untouched, so **taps work from the first frame** (tested: a checkbox tapped mid-entrance completes the task).
+  - Header: drops 8 dp + fade.
+  - Rows: the page heading is row 0, then items; each rises 24 dp + fade with a **32 ms stagger**, capped at 8 rows.
+  - Bottom row: rises 24 dp, 60 ms delay.
+- Spring `SpringToken(0.24, 0.90)`. It is not in `Springs.all`; its 1 % settle is about 0.2 s, so row 8 settles by about 425 ms. Everything is exactly settled at **450 ms**.
+- Plays once per process, on an Activity created without saved state (`TodoApp.entranceShown`). Configuration changes, returning from the background, a relaunch in a warm process, and navigation pops don't replay it.
+- The entrance starts when the first task list arrives (the splash covers until then).
+- Reduced motion: one 150 ms fade, no movement.
+
+### Rotating composer hint
+- `ui/home/ComposerHint.kt`. The phrases are "Add a task" (always first), "Call mom tomorrow 6pm", "Pay rent every month on 1st", "Groceries #personal", "Review deck Friday !high" and "Water plants every 3 days". `ComposerHintTest` parses each one with QuickParse and checks the title, date, time, repeat, list and priority, so we never teach syntax we don't support.
+- Every 3.5 s: the new phrase rises 12 dp in while the old one rises out, both on `Springs.Quick` with a fade. Reduced motion: a 150 ms crossfade.
+- Runs only while the field is empty, unfocused, expanded (not the collapsed pill) and the Activity is RESUMED. While paused it keeps the current phrase.
+- Semantics are cleared to a static "Add a task" (merged into the field), so TalkBack never reads the examples.
+- Frame-comparison tests run with the hint held still (`todo.static.hints` system property in the test task); `ComposerHintTest` turns it on.
+
+### Verification
+- `./gradlew testDebugUnitTest --rerun`: **230 tests, all pass** (+`BackupTest` 9, +`ComposerHintTest` 5, +`LaunchEntranceTest` 5).
+- `-Pshots --tests '*ScreenshotTest*'`: **57 pass** (+`V10ScreenshotTest` 3).
+- Shots (`out/shots/`):
+  - `icon-a.png`, `icon-b.png` (512 px, circle mask);
+  - `icon-preview.png` (launcher mock at 48 dp: light and dark wallpapers, themed monochrome, squircle mask);
+  - `settings-data-{light,dark}.png`, `import-preview-{light,dark}.png`, `import-replace-{light,dark}.png`, `import-error-{light,dark}.png`;
+  - `launch-filmstrip.png` (0–480 ms every 32 ms; the last frame is pixel-identical to the settled frame 1.5 s later; asserted);
+  - `composer-hint-filmstrip.png` (spring swap row, then the reduced-motion crossfade row).
+- Release: `out/todo-release.apk` **5,744,927 bytes**.
+  - apksigner verify OK (V2, Android Debug).
+  - aapt2: versionCode 18, versionName 0.10.0, label "Todo".
+  - Manifest has `dataExtractionRules` + `fullBackupContent`; the strings "Add to Todo" etc. are in the APK.
+  - `verify_release.py` OK (42 checks).
+
+### Risks
+- The splash colour is a single colour. It matches the sky where the icon sits, but the sky is a gradient, so the top and bottom edges shift slightly as the 180 ms fade hands over.
+- Merge treats "same id + same createdAt" as the same task. Two phones that never shared data could only collide on that by chance (same ms). Merged edits from the file win over local edits; there are no per-field timestamps.
+- Replace restores the file's settings (theme, motion, focus, planning). Merge keeps local settings.
+- Auto Backup: Android decides when to back up (daily, idle, charging, on Wi-Fi); nothing to verify on Robolectric beyond the manifest/XML. The WAL is included so recent writes aren't lost.
+- The hint keeps rotating while Home sits under a pushed screen (same Activity, still RESUMED). It is invisible there and costs one recomposition per 3.5 s.
+
 ## Milestone 9.1 (v0.9.1, code 17): theme toggle with circular reveal, no square press ripple
 
 ### Theme toggle
@@ -804,7 +875,7 @@ Local git: one commit per step (`git log`): baseline 0.7.4, domain + schema 5, U
 
 ## Tests
 
-`./gradlew testDebugUnitTest`: **211 tests, all pass** (v0.9.1: +`ThemeRevealTest` 5, +`PressFeedbackTest` 5; v0.9: +`ListsPanelTest` 4, +`PlanLineTest` 5, +`ComposerCollapseTest` 2, +`ComposerTouchTest` 1, `ListPillMorphTest` → `ListsPanelMorphTest`; v0.8.1: +`WidgetSessionTest` 2, +`TodayWidgetGlanceTest` 2; v0.8: +`ShareCaptureTest` 9, +`ViewFilterTest` 4, +`PlannerTest` 3, +`MigrationTest` 2 (4 → 5, 2 → 5), +`WidgetDataTest` 3, +`PlanReminderTest` 1, +`CaptureIntentTest` 3; v0.7.4: +`ComposerTouchTest` 4; v0.7.3: +`CollapseMachineTest` 8, +`ComposerCollapseTest` 4; v0.7.2: +`BottomFadeTest` 3; v0.7.1: +`ListPillMorphTest` 2; v0.7: +`QuickParseOrgTest` 10, +`FocusTest` 7, +`ReorderTest` 7, +`TemplatesTest` 6, +`OrgRepositoryTest` 9, +`MigrationTest` 1 (3 → 4), +`NotificationOpenTest` 4; v0.6.2: +`HeaderEdgeTest` 3; v0.6.1: +`TransitionTest` 6; v0.6: +`QuickParseTest` 21, +`RepeatRuleTest` 12, +`SnoozeTest` 6, +`ComposerTest` 2 (chips appear, submit carries the parse, tapping a chip keeps the words), +`MigrationTest` 1 (v2 → v3 preserves data), +`RepeatRepositoryTest` 2; v0.5: +`PillFirstFrameTest` 1, +`TaskPanelTest` 3). `-Pshots --tests '*ScreenshotTest*'`: **54** screenshot tests (v0.9.1: +`theme-menu-*` 2) (v0.9: −6 list-pill/picker, +14 header/bottom-row/pair/home/lists-panel) (v0.8: +10 in `V08ScreenshotTest`: capture light/dark + open filmstrip + save/confirm, plan light/dark + keep filmstrip + summary, search filters light/dark, widget + preview light/dark) (v0.7.3: +`ComposerPillScreenshotTest` 2) (v0.7.2: +3 `ComposerFrostScreenshotTest`; v0.7.1: +4 pill shots; v0.7: +12 in `OrgScreenshotTest`), all pass. `SectionsTest` was replaced by:
+`./gradlew testDebugUnitTest`: **230 tests, all pass** (v0.10: +`BackupTest` 9, +`ComposerHintTest` 5, +`LaunchEntranceTest` 5; v0.9.1: +`ThemeRevealTest` 5, +`PressFeedbackTest` 5; v0.9: +`ListsPanelTest` 4, +`PlanLineTest` 5, +`ComposerCollapseTest` 2, +`ComposerTouchTest` 1, `ListPillMorphTest` → `ListsPanelMorphTest`; v0.8.1: +`WidgetSessionTest` 2, +`TodayWidgetGlanceTest` 2; v0.8: +`ShareCaptureTest` 9, +`ViewFilterTest` 4, +`PlannerTest` 3, +`MigrationTest` 2 (4 → 5, 2 → 5), +`WidgetDataTest` 3, +`PlanReminderTest` 1, +`CaptureIntentTest` 3; v0.7.4: +`ComposerTouchTest` 4; v0.7.3: +`CollapseMachineTest` 8, +`ComposerCollapseTest` 4; v0.7.2: +`BottomFadeTest` 3; v0.7.1: +`ListPillMorphTest` 2; v0.7: +`QuickParseOrgTest` 10, +`FocusTest` 7, +`ReorderTest` 7, +`TemplatesTest` 6, +`OrgRepositoryTest` 9, +`MigrationTest` 1 (3 → 4), +`NotificationOpenTest` 4; v0.6.2: +`HeaderEdgeTest` 3; v0.6.1: +`TransitionTest` 6; v0.6: +`QuickParseTest` 21, +`RepeatRuleTest` 12, +`SnoozeTest` 6, +`ComposerTest` 2 (chips appear, submit carries the parse, tapping a chip keeps the words), +`MigrationTest` 1 (v2 → v3 preserves data), +`RepeatRepositoryTest` 2; v0.5: +`PillFirstFrameTest` 1, +`TaskPanelTest` 3). `-Pshots --tests '*ScreenshotTest*'`: **57** screenshot tests (v0.10: +`V10ScreenshotTest` 3) (v0.9.1: +`theme-menu-*` 2) (v0.9: −6 list-pill/picker, +14 header/bottom-row/pair/home/lists-panel) (v0.8: +10 in `V08ScreenshotTest`: capture light/dark + open filmstrip + save/confirm, plan light/dark + keep filmstrip + summary, search filters light/dark, widget + preview light/dark) (v0.7.3: +`ComposerPillScreenshotTest` 2) (v0.7.2: +3 `ComposerFrostScreenshotTest`; v0.7.1: +4 pill shots; v0.7: +12 in `OrgScreenshotTest`), all pass. `SectionsTest` was replaced by:
 - `PagesTest` (11): Today/Upcoming/Done classification; Today = open today/overdue/undated in creation order with "Overdue · Yesterday"; Upcoming grouped by day with headers (Tomorrow / Friday / Wed, 28 Oct) and no repeated date; Done grouped by completion day newest first with Clear done count; empty states and All clear count; leaving rows stay on their page (dwell vs collapsing, reopen from Done); day labels (Locale.UK); row meta; overrides + hidden deletes; due chips (next week = next Monday); entrance tracker baseline + forget.
 - `SettingsTest` (4): defaults when nothing stored, stored values, unknown theme → System, `ThemeMode.isDark`.
 - `SearchTest` (3): blank query, title+notes case-insensitive match with open-first order, no match.
@@ -826,7 +897,7 @@ Milestone 1 tests:
 7. Header is glass with title + search/settings + filter pill; the open-task count digit slide was dropped with the old header. Launch entrance §6.1 not done (step 9). §6.8 inline expand skipped; v0.5 replaces the sheet with the contextual floating panel (6.7-style).
 8. In-app reduce motion / haptics / theme are real settings (DataStore). Theme changes switch instantly (no animated palette crossfade).
 9. `Settings.System.HAPTIC_FEEDBACK_ENABLED` is deprecated in SDK 37 but is still read (suppressed) as the spec asks.
-10. Debug APK (milestone 2 build) is about 31 MB because it is unminified. **Release APK (v0.9.1 / code 17): 5,691,211 bytes (about 5.7 MB), apksigner verify OK (V2, Android Debug), aapt2 badging versionCode 17 / versionName 0.9.1, `scripts/verify_release.py` OK (42 by-name checks).** v0.9.0 / code 16: 5,674,827 bytes. v0.8.1 / code 15: 5,658,443 bytes. v0.8.0 / code 14: 5,647,619 bytes. v0.7.4 / code 13: 4,655,871 bytes. v0.7.1 / code 10: 4,639,487 bytes. v0.7.0 / code 9: 4,623,103 bytes. v0.6.2 / code 8: 4,442,879 bytes. v0.6.1 / code 7: 4,442,879 bytes (Navigation 3 removed). v0.6.0 / code 6: 4,476,032 bytes. v0.5.0 / code 5: 4,301,408 bytes (about 4.3 MB). Milestone 4 (v0.4.0 / code 4): 4,285,024 bytes (about 4.3 MB; +0.9 MB for the two Newsreader variable fonts, minus Instrument Serif). Milestone 3 was 3,769,333 bytes, with R8, resource shrinking, baseline profile, debug-key signing (apksigner verify OK, V2).
+10. Debug APK (milestone 2 build) is about 31 MB because it is unminified. **Release APK (v0.10.0 / code 18): 5,744,927 bytes (about 5.7 MB), apksigner verify OK (V2, Android Debug), aapt2 badging versionCode 18 / versionName 0.10.0, `scripts/verify_release.py` OK (42 by-name checks).** v0.9.1 / code 17: 5,691,211 bytes. v0.9.0 / code 16: 5,674,827 bytes. v0.8.1 / code 15: 5,658,443 bytes. v0.8.0 / code 14: 5,647,619 bytes. v0.7.4 / code 13: 4,655,871 bytes. v0.7.1 / code 10: 4,639,487 bytes. v0.7.0 / code 9: 4,623,103 bytes. v0.6.2 / code 8: 4,442,879 bytes. v0.6.1 / code 7: 4,442,879 bytes (Navigation 3 removed). v0.6.0 / code 6: 4,476,032 bytes. v0.5.0 / code 5: 4,301,408 bytes (about 4.3 MB). Milestone 4 (v0.4.0 / code 4): 4,285,024 bytes (about 4.3 MB; +0.9 MB for the two Newsreader variable fonts, minus Instrument Serif). Milestone 3 was 3,769,333 bytes, with R8, resource shrinking, baseline profile, debug-key signing (apksigner verify OK, V2).
 11. Auto-scroll for a new row that is fully off-screen uses `animateScrollToItem(index)`, which lands it at the top of the viewport unless it is the last list item. The common case (a partly hidden row) scrolls by the overflow on Smooth.
 12. Swipe-to-delete fling velocity threshold is M3's internal default (not configurable in 1.4.0); only the 35 % positional threshold is set. Swipe is end→start only.
 13. "Next week" chip = next Monday. Search results are not grouped by page. Licences screen lists libraries by name + licence (only the font OFL texts are bundled).
