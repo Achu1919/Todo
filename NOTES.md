@@ -674,6 +674,61 @@ Local git: one commit per step (`git log`): baseline 0.7.4, domain + schema 5, U
 ### Risks
 - ColorOS can defer or kill background jobs ("auto launch" off, strict battery optimisation). Glance renders through WorkManager, so updates may lag until Todo is opened once. Logcat tag `TodoWidget` (plus `WM-` and `GlanceAppWidget`) shows failures.
 
+## Milestone 9 (v0.9.0, code 16): lists button, lists panel, lighter header
+
+### What changed
+- **Bottom row.** There is a new round 48 dp glass lists button left of the composer, 8 dp from it. It uses the composer's glass: Mid shadow, frosted blur, 1 dp rim. The composer takes the rest of the width (24 dp side margins as before).
+  - Content: our own Layers icon when All lists is selected, or the list's colour dot (11 dp) with a 20 dp ring in the same colour at 35 % alpha. A list with an emoji shows the emoji. A small accent dot at the top right means a focus mode is on.
+  - Accessible label: "Lists, current: <name>", with ", Work focus on" added when focus is on. Role Button.
+- **Lists panel** (`ListsPanelContent`). It morphs out of the button with the same Menu style as the old list menu: Morph spring 0.38 s / 0.90, content in at 40 % over 120 ms, out over 90 ms, the same scrim, blur and dim.
+  - Placement (new `above` set in `TaskPanelHost`): the panel floats above the button. Its bottom edge is 10 dp above the button's top and its left edge is on the button's left, clamped on screen. Width is min(W − 32 dp, 360 dp). Height is capped at min(space above, 60 % of the screen), and the content scrolls.
+  - The morph now starts from the anchor's own shadow level (`anchorLevels`: Mid for the button), so the first and last frames match the button.
+  - Sections:
+    - Plan your day, with a live summary from `PlanLine` ("2 overdue · 3 today" / "Nothing due today", the same rules as the planner). It closes the panel and pushes Plan.
+    - Lists: the Focus switch (kept, see Decisions), All lists, each list with its dot and open count, a checkmark on the current one, and New list (opens Lists). Selecting a list closes the panel and switches.
+    - Saved views, if there are any. Each opens Search with the view applied.
+    - Settings.
+  - Back or a tap outside closes it with the morph.
+- **Header.** Search on the left and the Today/Upcoming/Done pill, which keeps symmetric insets so it stays centred on screen. The Settings button and the list chip under the heading are gone, and so is the heading tap. `ListChip`, `ListPillContent`, `ListPickerContent` and `FocusBadge` were deleted.
+- **Collapse.** The lists button and the capsule move on the same progress (one spring, layout phase only).
+  - Button x = 24 dp + k·(F − 120 dp)/2, where F is the capsule's full width. The capsule shrinks symmetrically in its own frame [80 dp, W − 24 dp].
+  - The pair (48 + 8 + 120 = 176 dp) stays centred on the screen in every frame.
+  - The shield is the full width when expanded and 192 dp (pair + 8 dp each side) when collapsed, centred, so taps beside the pair reach the rows.
+  - Reduced motion: the button shares the composer's crossfade (`chrome.fade`).
+  - The collapse and expand rules are unchanged.
+
+### Decisions
+- **Settings moved into the lists panel** as the last row. The spec keeps only search and the pill in the header, and the old top-right button was Settings, not a list menu. Without this, Settings would have had no entry point.
+- **Focus mode kept in the panel** (Lists section), so the feature is not lost. The button shows an accent dot while focus is on.
+- **Tap while typing = dismiss + open.** Editing ends (field unfocused, IME hide requested once, the draft is kept). We wait for the IME inset to reach 0 (600 ms cap) plus one frame, then open the panel, so it grows from the button's resting place and never races the keyboard animation. The button never takes text focus. Not typing: it opens at once.
+- New list goes to the Lists screen, which already has the New list form.
+- Deep links are unchanged: the notification open request still closes any menu and opens the task panel, and the plan reminder and widget intents still go through `MainActivity`. `NotificationOpenTest` passes.
+
+### Measurements (Robolectric 411×891 dp)
+- Panel: 360 × ~428 dp (48 % of the screen), bottom 9.9 dp above the button, left = the button's left (24 dp).
+- Open settles in 432 ms. Close: the last capsule frame is at 416 ms, landing error 0.000 dp, and the landing frame matches the settled frame (diff 0.0).
+- Pair collapse and expand: 400 ms to the landing frame. Button x 24 → 117 dp. Pair centre constant within 0.5 dp, capsule − button offset 56 dp in every frame, last frame == settled (diff 0).
+
+### Tests
+- `ListsPanelMorphTest` (was `ListPillMorphTest`): the open and close morph frame by frame, plus placement (above, bottom-left, 60 % cap, 360 dp max). Filmstrips `lists-panel-open-filmstrip.png` and `lists-panel-close-filmstrip.png`.
+- `ComposerCollapseTest` +2:
+  - The pair collapses and expands centred, with a rigid button/capsule coupling, the 8 dp gap and last frame == settled. Filmstrips `composer-pair-collapse-filmstrip.png` and `composer-pair-expand-filmstrip.png`.
+  - Reduced motion: two positions only.
+- `ComposerTouchTest`:
+  - The probe now covers the button (it opens the lists panel), the gap, the area left of the button and the pair in expanded, collapsed and mid-morph states.
+  - "Beside the pair" taps reach rows.
+  - New test: tapping the button while typing dismisses, then opens.
+- `ListsPanelTest` (4): no Settings button or list chip in the header and the button label; the plan summary and push; selecting a list switches and closes; New list, saved view, Settings and Back.
+- `PlanLineTest` (5).
+- `TransitionTest` and `NotificationOpenTest` reach Settings through the lists panel. In `TransitionTest` the push recording starts at the Settings row tap. `HeaderEdgeTest` is unchanged and passes.
+- Shots: `home-header-*`, `home-bottom-row-*` (+ `-list-` and `-focus-`), `home-pair-collapsed-*`, `home-v09-*`, `lists-panel-*` (replaces `list-picker-*` and `home-list-pill-*`).
+
+### Risks
+- Settings is now two taps away (lists button → Settings). This is worth confirming with Sai.
+- The IME wait relies on `WindowInsets.ime` animating to 0. On OEM keyboards that never report insets, the 600 ms cap applies.
+- The panel is 360 dp max, so on 600 dp+ tablets it sits at the bottom left, not centred.
+- One unrelated-looking run had `TransitionTest.settings*` fail to find the Settings row. It did not reproduce in 3 runs. The nav helpers now wait for the panel to exist before tapping.
+
 ## Tests
 - `org/QuickParseOrgTest` (10)
 - `FocusTest` (7, IST, edge minutes, overnight, manual until boundary)
@@ -698,7 +753,7 @@ Local git: one commit per step (`git log`): baseline 0.7.4, domain + schema 5, U
 
 ## Tests
 
-`./gradlew testDebugUnitTest`: **189 tests, all pass** (v0.8.1: +`WidgetSessionTest` 2, +`TodayWidgetGlanceTest` 2; v0.8: +`ShareCaptureTest` 9, +`ViewFilterTest` 4, +`PlannerTest` 3, +`MigrationTest` 2 (4 → 5, 2 → 5), +`WidgetDataTest` 3, +`PlanReminderTest` 1, +`CaptureIntentTest` 3; v0.7.4: +`ComposerTouchTest` 4; v0.7.3: +`CollapseMachineTest` 8, +`ComposerCollapseTest` 4; v0.7.2: +`BottomFadeTest` 3; v0.7.1: +`ListPillMorphTest` 2; v0.7: +`QuickParseOrgTest` 10, +`FocusTest` 7, +`ReorderTest` 7, +`TemplatesTest` 6, +`OrgRepositoryTest` 9, +`MigrationTest` 1 (3 → 4), +`NotificationOpenTest` 4; v0.6.2: +`HeaderEdgeTest` 3; v0.6.1: +`TransitionTest` 6; v0.6: +`QuickParseTest` 21, +`RepeatRuleTest` 12, +`SnoozeTest` 6, +`ComposerTest` 2 (chips appear, submit carries the parse, tapping a chip keeps the words), +`MigrationTest` 1 (v2 → v3 preserves data), +`RepeatRepositoryTest` 2; v0.5: +`PillFirstFrameTest` 1, +`TaskPanelTest` 3). `-Pshots --tests '*ScreenshotTest*'`: **44** screenshot tests (v0.8: +10 in `V08ScreenshotTest`: capture light/dark + open filmstrip + save/confirm, plan light/dark + keep filmstrip + summary, search filters light/dark, widget + preview light/dark) (v0.7.3: +`ComposerPillScreenshotTest` 2) (v0.7.2: +3 `ComposerFrostScreenshotTest`; v0.7.1: +4 pill shots; v0.7: +12 in `OrgScreenshotTest`), all pass. `SectionsTest` was replaced by:
+`./gradlew testDebugUnitTest`: **201 tests, all pass** (v0.9: +`ListsPanelTest` 4, +`PlanLineTest` 5, +`ComposerCollapseTest` 2, +`ComposerTouchTest` 1, `ListPillMorphTest` → `ListsPanelMorphTest`; v0.8.1: +`WidgetSessionTest` 2, +`TodayWidgetGlanceTest` 2; v0.8: +`ShareCaptureTest` 9, +`ViewFilterTest` 4, +`PlannerTest` 3, +`MigrationTest` 2 (4 → 5, 2 → 5), +`WidgetDataTest` 3, +`PlanReminderTest` 1, +`CaptureIntentTest` 3; v0.7.4: +`ComposerTouchTest` 4; v0.7.3: +`CollapseMachineTest` 8, +`ComposerCollapseTest` 4; v0.7.2: +`BottomFadeTest` 3; v0.7.1: +`ListPillMorphTest` 2; v0.7: +`QuickParseOrgTest` 10, +`FocusTest` 7, +`ReorderTest` 7, +`TemplatesTest` 6, +`OrgRepositoryTest` 9, +`MigrationTest` 1 (3 → 4), +`NotificationOpenTest` 4; v0.6.2: +`HeaderEdgeTest` 3; v0.6.1: +`TransitionTest` 6; v0.6: +`QuickParseTest` 21, +`RepeatRuleTest` 12, +`SnoozeTest` 6, +`ComposerTest` 2 (chips appear, submit carries the parse, tapping a chip keeps the words), +`MigrationTest` 1 (v2 → v3 preserves data), +`RepeatRepositoryTest` 2; v0.5: +`PillFirstFrameTest` 1, +`TaskPanelTest` 3). `-Pshots --tests '*ScreenshotTest*'`: **52** screenshot tests (v0.9: −6 list-pill/picker, +14 header/bottom-row/pair/home/lists-panel) (v0.8: +10 in `V08ScreenshotTest`: capture light/dark + open filmstrip + save/confirm, plan light/dark + keep filmstrip + summary, search filters light/dark, widget + preview light/dark) (v0.7.3: +`ComposerPillScreenshotTest` 2) (v0.7.2: +3 `ComposerFrostScreenshotTest`; v0.7.1: +4 pill shots; v0.7: +12 in `OrgScreenshotTest`), all pass. `SectionsTest` was replaced by:
 - `PagesTest` (11): Today/Upcoming/Done classification; Today = open today/overdue/undated in creation order with "Overdue · Yesterday"; Upcoming grouped by day with headers (Tomorrow / Friday / Wed, 28 Oct) and no repeated date; Done grouped by completion day newest first with Clear done count; empty states and All clear count; leaving rows stay on their page (dwell vs collapsing, reopen from Done); day labels (Locale.UK); row meta; overrides + hidden deletes; due chips (next week = next Monday); entrance tracker baseline + forget.
 - `SettingsTest` (4): defaults when nothing stored, stored values, unknown theme → System, `ThemeMode.isDark`.
 - `SearchTest` (3): blank query, title+notes case-insensitive match with open-first order, no match.
@@ -720,7 +775,7 @@ Milestone 1 tests:
 7. Header is glass with title + search/settings + filter pill; the open-task count digit slide was dropped with the old header. Launch entrance §6.1 not done (step 9). §6.8 inline expand skipped; v0.5 replaces the sheet with the contextual floating panel (6.7-style).
 8. In-app reduce motion / haptics / theme are real settings (DataStore). Theme changes switch instantly (no animated palette crossfade).
 9. `Settings.System.HAPTIC_FEEDBACK_ENABLED` is deprecated in SDK 37 but is still read (suppressed) as the spec asks.
-10. Debug APK (milestone 2 build) is about 31 MB because it is unminified. **Release APK (v0.8.1 / code 15): 5,658,443 bytes (about 5.7 MB), apksigner verify OK (V2, Android Debug), aapt2 badging versionCode 15 / versionName 0.8.1, `scripts/verify_release.py` OK.** v0.8.0 / code 14: 5,647,619 bytes. v0.7.4 / code 13: 4,655,871 bytes. v0.7.1 / code 10: 4,639,487 bytes. v0.7.0 / code 9: 4,623,103 bytes. v0.6.2 / code 8: 4,442,879 bytes. v0.6.1 / code 7: 4,442,879 bytes (Navigation 3 removed). v0.6.0 / code 6: 4,476,032 bytes. v0.5.0 / code 5: 4,301,408 bytes (about 4.3 MB). Milestone 4 (v0.4.0 / code 4): 4,285,024 bytes (about 4.3 MB; +0.9 MB for the two Newsreader variable fonts, minus Instrument Serif). Milestone 3 was 3,769,333 bytes, with R8, resource shrinking, baseline profile, debug-key signing (apksigner verify OK, V2).
+10. Debug APK (milestone 2 build) is about 31 MB because it is unminified. **Release APK (v0.9.0 / code 16): 5,674,827 bytes (about 5.7 MB), apksigner verify OK (V2, Android Debug), aapt2 badging versionCode 16 / versionName 0.9.0, `scripts/verify_release.py` OK (42 by-name checks).** v0.8.1 / code 15: 5,658,443 bytes. v0.8.0 / code 14: 5,647,619 bytes. v0.7.4 / code 13: 4,655,871 bytes. v0.7.1 / code 10: 4,639,487 bytes. v0.7.0 / code 9: 4,623,103 bytes. v0.6.2 / code 8: 4,442,879 bytes. v0.6.1 / code 7: 4,442,879 bytes (Navigation 3 removed). v0.6.0 / code 6: 4,476,032 bytes. v0.5.0 / code 5: 4,301,408 bytes (about 4.3 MB). Milestone 4 (v0.4.0 / code 4): 4,285,024 bytes (about 4.3 MB; +0.9 MB for the two Newsreader variable fonts, minus Instrument Serif). Milestone 3 was 3,769,333 bytes, with R8, resource shrinking, baseline profile, debug-key signing (apksigner verify OK, V2).
 11. Auto-scroll for a new row that is fully off-screen uses `animateScrollToItem(index)`, which lands it at the top of the viewport unless it is the last list item. The common case (a partly hidden row) scrolls by the overflow on Smooth.
 12. Swipe-to-delete fling velocity threshold is M3's internal default (not configurable in 1.4.0); only the 35 % positional threshold is set. Swipe is end→start only.
 13. "Next week" chip = next Monday. Search results are not grouped by page. Licences screen lists libraries by name + licence (only the font OFL texts are bundled).
