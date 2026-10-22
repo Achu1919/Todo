@@ -51,7 +51,7 @@ object MenuIds {
     const val ADD_MENU = -2L
 }
 
-/** What the list chip under the heading says. Pure, built from the current selection and focus. */
+/** What the lists button says (v0.9; was the list chip under the heading). Pure, built from the current selection and focus. */
 @Immutable
 data class ListChipState(val label: String, val color: Int?, val focus: FocusMode, val emoji: String? = null)
 
@@ -64,154 +64,9 @@ fun listChipState(lists: List<TaskList>, selected: Long?, focus: FocusMode): Lis
     }
 }
 
-/**
- * The list selector under the page heading (v0.7.1): a glass pill button with the shared glass
- * tokens of the round header buttons and the pill track (translucent fill, 1 dp gradient rim,
- * soft Low shadow), 34 dp tall, fully rounded: list dot / emoji / lists icon, the name, a small
- * chevron, and, with a focus mode on, a hairline and an accent "◎ Work" segment inside the same
- * pill. The touch target is 48 dp tall; [pillModifier] goes on the visible capsule only (the
- * picker morphs out of and back into exactly those bounds).
- */
-@Composable
-fun ListChip(state: ListChipState, onClick: () -> Unit, modifier: Modifier = Modifier, pillModifier: Modifier = Modifier) {
-    val c = AppTheme.colors
-    val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-    Box(
-        modifier
-            .padding(top = 3.dp)
-            .heightIn(min = 48.dp)
-            .clickable(interaction, indication = null, role = Role.Button, onClickLabel = "Choose list", onClick = onClick),
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        Box(
-            pillModifier
-                .testTag("list-pill")
-                .height(ListPillHeight)
-                .glassControl(Shapes.full)
-                .clip(Shapes.full)
-                .indication(interaction, androidx.compose.material3.ripple()),
-            contentAlignment = Alignment.CenterStart,
-        ) { ListPillContent(state) }
-    }
-}
-
-/**
- * What is inside the list pill (no surface): also drawn by the picker's morph inside the
- * shrinking capsule, so the capsule lands as the pill itself.
- */
-@Composable
-fun ListPillContent(state: ListChipState, modifier: Modifier = Modifier) {
-    val c = AppTheme.colors
-    Row(modifier.height(ListPillHeight).padding(start = 12.dp, end = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-        when {
-            state.emoji != null -> Text(state.emoji, style = AppTheme.type.label)
-            state.color != null -> ListDot(c.listColor(state.color), 8.dp)
-            else -> Icon(AppIcons.Lists, null, tint = c.inkSecondary, modifier = Modifier.size(15.dp))
-        }
-        Spacer(Modifier.width(7.dp))
-        Text(state.label, style = AppTheme.type.label, color = c.ink, maxLines = 1)
-        if (state.focus != FocusMode.Off) {
-            Spacer(Modifier.width(9.dp))
-            Box(Modifier.width(1.dp).height(14.dp).background(c.inkFill))
-            Spacer(Modifier.width(8.dp))
-            Icon(AppIcons.Focus, null, tint = c.accent, modifier = Modifier.size(13.dp))
-            Spacer(Modifier.width(4.dp))
-            Text(
-                state.focus.name, style = AppTheme.type.meta, color = c.accent, maxLines = 1,
-                modifier = Modifier.semantics { contentDescription = "${state.focus.name} focus is on" },
-            )
-        }
-        Spacer(Modifier.width(3.dp))
-        Icon(AppIcons.ChevronDown, null, tint = c.inkTertiary, modifier = Modifier.size(16.dp))
-    }
-}
-
-/** List pill height (inside the 48 dp touch target). */
-val ListPillHeight = 34.dp
-
-/** "◎ Work focus": accent-tinted, small; the header's focus indicator. */
-@Composable
-fun FocusBadge(mode: FocusMode) {
-    val c = AppTheme.colors
-    Row(
-        Modifier
-            .clip(Shapes.full)
-            .padding(horizontal = 8.dp, vertical = 4.dp)
-            .semantics { contentDescription = "${mode.name} focus is on" },
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(AppIcons.Focus, null, tint = c.accent, modifier = Modifier.size(14.dp))
-        Spacer(Modifier.width(5.dp))
-        Text("${mode.name} focus", style = AppTheme.type.meta, color = c.accent, maxLines = 1)
-    }
-}
-
-/**
- * Floating list picker contents (shown in the same glass panel host as the task panel):
- * focus mode switch, "All lists", the lists of the current focus with open counts, and Manage.
- */
-@Composable
-fun ListPickerContent(
-    lists: List<TaskList>,
-    openCounts: Map<Long, Int>,
-    selected: Long?,
-    focus: FocusMode,
-    prefs: FocusPrefs,
-    onSelect: (Long?) -> Unit,
-    onFocus: (FocusMode) -> Unit,
-    onManage: () -> Unit,
-    /** v0.8: saved search views (open Search with the view) and morning planning. */
-    views: List<dev.saikrishna.todo.data.SavedView> = emptyList(),
-    onView: (dev.saikrishna.todo.data.SavedView) -> Unit = {},
-    onPlan: (() -> Unit)? = null,
-) {
-    val c = AppTheme.colors
-    val haptics = LocalHaptics.current
-    val shown = lists.filter { focus.area == null || it.area == focus.area }
-    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(vertical = 10.dp)) {
-        MenuTitle("Lists", action = "Manage", onAction = onManage)
-        Column(Modifier.padding(horizontal = 16.dp)) {
-            Text("Focus", style = AppTheme.type.meta, color = c.inkSecondary, modifier = Modifier.padding(top = 4.dp, bottom = 8.dp, start = 2.dp))
-            SegmentedPill(
-                options = FocusMode.entries.toList(),
-                selected = focus,
-                label = { it.name },
-                onSelect = onFocus,
-            )
-            Text(
-                focusCaption(prefs, focus),
-                style = AppTheme.type.meta, color = c.inkTertiary,
-                modifier = Modifier.padding(top = 6.dp, start = 2.dp, bottom = 6.dp),
-            )
-        }
-        PickerRow(
-            label = if (focus == FocusMode.Off) "All lists" else "All ${focus.name.lowercase()} lists",
-            color = null,
-            count = shown.sumOf { openCounts[it.id] ?: 0 },
-            selected = selected == null,
-        ) { haptics.tick(); onSelect(null) }
-        for (l in shown) {
-            PickerRow(
-                label = listOfNotNull(l.emoji, l.name).joinToString(" "),
-                color = l.color,
-                count = openCounts[l.id] ?: 0,
-                selected = selected == l.id,
-            ) { haptics.tick(); onSelect(l.id) }
-        }
-        if (views.isNotEmpty()) {
-            Text("Saved views", style = AppTheme.type.meta, color = c.inkSecondary, modifier = Modifier.padding(start = 22.dp, top = 10.dp, bottom = 2.dp))
-            for (v in views) MenuLinkRow(AppIcons.Bookmark, v.name) { haptics.tick(); onView(v) }
-        }
-        if (onPlan != null) {
-            Spacer(Modifier.height(4.dp))
-            MenuLinkRow(AppIcons.Sun, "Plan your day") { haptics.tick(); onPlan() }
-        }
-    }
-}
-
 /** v0.8 menu row that goes somewhere (saved view, planning): icon, label, chevron. */
 @Composable
-private fun MenuLinkRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
+internal fun MenuLinkRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
     val c = AppTheme.colors
     Row(
         Modifier
@@ -247,7 +102,7 @@ fun daysLabel(days: Set<DayOfWeek>): String {
 }
 
 @Composable
-private fun MenuTitle(title: String, action: String?, onAction: (() -> Unit)?) {
+internal fun MenuTitle(title: String, action: String?, onAction: (() -> Unit)?) {
     val c = AppTheme.colors
     Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 10.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, style = AppTheme.type.title, color = c.ink, modifier = Modifier.weight(1f))
@@ -264,7 +119,7 @@ private fun MenuTitle(title: String, action: String?, onAction: (() -> Unit)?) {
 }
 
 @Composable
-private fun PickerRow(label: String, color: Int?, count: Int, selected: Boolean, onClick: () -> Unit) {
+internal fun PickerRow(label: String, color: Int?, count: Int, selected: Boolean, onClick: () -> Unit) {
     val c = AppTheme.colors
     Row(
         Modifier

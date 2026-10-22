@@ -101,6 +101,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.LocalDate
+import dev.saikrishna.todo.domain.PlanLine
+import androidx.compose.foundation.layout.ime
 import java.time.LocalDateTime
 import java.time.ZoneId
 
@@ -208,6 +210,7 @@ fun HomeScreen(
         )
     }
     val chip = listChipState(lists, selected, focus)
+    val planSummary = remember(all, today) { PlanLine.of(all, today) }
     val pages by remember(all, today, org) { derivedStateOf { buildPages(all, today, zone, leave.entries, org = org) } }
     val openCounts = remember(all) { all.filter { !it.done }.groupingBy { it.listId }.eachCount() }
     val menuAnchors = remember { PanelAnchors() }
@@ -281,6 +284,25 @@ fun HomeScreen(
     // ---- v0.7.3: composer collapses to a centred pill while scrolling down ---------------------
     val density = LocalDensity.current
     val chrome = remember { with(density) { ComposerChrome(28.dp.toPx(), 16.dp.toPx()) } }
+    // v0.9 lists button. While typing, a tap first dismisses editing (keyboard down, composer
+    // unfocused), waits for the keyboard to finish leaving (max 600 ms) and one frame, then opens
+    // the panel, so it grows from the button's resting place and never fights the IME animation.
+    // The button itself is not focusable for text, so it never steals focus from the field.
+    val imeInsets = WindowInsets.ime
+    val densityNow = LocalDensity.current
+    val openListsPanel: () -> Unit = {
+        haptics.tick()
+        val typing = chrome.focused || imeInsets.getBottom(densityNow) > 0
+        if (!typing) menu = MenuIds.LIST_PICKER
+        else {
+            chrome.dismiss()
+            scope.launch {
+                kotlinx.coroutines.withTimeoutOrNull(600) { snapshotFlow { imeInsets.getBottom(densityNow) }.first { it == 0 } }
+                androidx.compose.runtime.withFrameNanos { }
+                menu = MenuIds.LIST_PICKER
+            }
+        }
+    }
     HomeTestHooks.chrome = chrome
     var draggingRow by remember { mutableStateOf(false) }
     chrome.list = listStates.getValue(filter)
@@ -389,14 +411,6 @@ fun HomeScreen(
                             actions = actions,
                             heading = headingFor(page, today),
                             caption = captionFor(page, pages),
-                            onHeadingClick = { haptics.tick(); menu = MenuIds.LIST_PICKER },
-                            headingExtra = {
-                                ListChip(
-                                    chip,
-                                    onClick = { haptics.tick(); menu = MenuIds.LIST_PICKER },
-                                    pillModifier = Modifier.panelAnchor(menuAnchors, MenuIds.LIST_PICKER),
-                                )
-                            },
                             modifier = Modifier.graphicsLayer {
                                 alpha = fade
                                 compositingStrategy = CompositingStrategy.ModulateAlpha
@@ -409,7 +423,6 @@ fun HomeScreen(
                     filter = filter,
                     onFilter = { chrome.dismiss(); filter = it },
                     onOpenSearch = onOpenSearch,
-                    onOpenSettings = onOpenSettings,
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .onSizeChanged { topPx.intValue = it.height },
@@ -435,6 +448,14 @@ fun HomeScreen(
                         onOptions = { menu = MenuIds.ADD_MENU },
                         optionsAnchor = Modifier.panelAnchor(menuAnchors, MenuIds.ADD_MENU),
                         chrome = chrome,
+                        // v0.9: the lists button, left of the composer (pairs with the pill when collapsed).
+                        leading = {
+                            ListsButton(
+                                state = chip,
+                                onClick = openListsPanel,
+                                anchor = Modifier.panelAnchor(menuAnchors, MenuIds.LIST_PICKER),
+                            )
+                        },
                         onSubmit = { parsed ->
                             // Show the page the new task lands on.
                             val future = parsed.dueDay != null && parsed.dueDay > today
@@ -520,35 +541,38 @@ fun HomeScreen(
             }
         }
 
-        // v0.7 floating menus (list picker, "+" menu): the same glass panel host, growing out of
-        // the list chip / the "+" button.
+        // v0.7 floating menus: the "+" menu grows out of the bare "+" icon; v0.9: the lists panel
+        // grows out of the lists button and floats ABOVE it, anchored bottom-left.
         TaskPanelHost(
             openId = menu,
             anchors = menuAnchors,
             backdrop = overlayHaze,
             onDismiss = { menu = null },
-            // v0.7.1: shared-bounds morph from the glass list pill / the bare "+" icon, Morph spring.
+            // v0.7.1: shared-bounds morph, Morph spring.
             style = HomeTestHooks.menuStyle ?: PanelStyle.Menu,
             bareAnchors = setOf(MenuIds.ADD_MENU),
-            ghost = { id -> if (id == MenuIds.LIST_PICKER) ListPillContent(chip) },
+            ghost = { id -> if (id == MenuIds.LIST_PICKER) ListsButtonContent(chip) },
+            above = setOf(MenuIds.LIST_PICKER),
         ) { id ->
             when (id) {
-                MenuIds.LIST_PICKER -> ListPickerContent(
+                MenuIds.LIST_PICKER -> ListsPanelContent(
+                    planLine = planSummary,
                     lists = lists,
                     openCounts = openCounts,
                     selected = selected,
                     focus = focus,
                     prefs = focusPrefs,
+                    views = views,
+                    onPlan = { menu = null; onOpenPlan() },
                     onSelect = { vm.selectList(it); menu = null },
                     onFocus = { vm.setFocus(it) },
-                    onManage = { menu = null; onOpenLists() },
-                    views = views,
+                    onNewList = { menu = null; onOpenLists() },
                     onView = { v ->
                         menu = null
                         vm.setSearchFilter(SearchFilter(dev.saikrishna.todo.domain.ViewFilter.decode(v.filter), query = v.query))
                         onOpenSearch()
                     },
-                    onPlan = { menu = null; onOpenPlan() },
+                    onSettings = { menu = null; onOpenSettings() },
                 )
                 MenuIds.ADD_MENU -> AddMenuContent(
                     templates = templates,
@@ -568,7 +592,7 @@ fun HomeScreen(
 }
 
 /**
- * Floating header (reference study): no bar, just a glass circle · pill · glass circle row over the
+ * Floating header (reference study): no bar, just a glass search circle and the centred pill over the
  * content. Content scrolling underneath is blurred at full strength behind the controls and the
  * blur fades out over the 28 dp below them (one masked blur pass for the whole header).
  */
@@ -577,14 +601,13 @@ private fun HomeHeader(
     filter: Filter,
     onFilter: (Filter) -> Unit,
     onOpenSearch: () -> Unit,
-    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     Box(modifier.fillMaxWidth()) {
         // Blurred, tinted edge behind the controls, fading out (eased) by 30 dp below them.
         GlassEdgeTop(solidHeight = statusTop + HeaderTop + PillSpec.Height)
-        HeaderControls(filter, onFilter, onOpenSearch, onOpenSettings)
+        HeaderControls(filter, onFilter, onOpenSearch)
     }
 }
 
@@ -593,8 +616,9 @@ private fun HeaderControls(
     filter: Filter,
     onFilter: (Filter) -> Unit,
     onOpenSearch: () -> Unit,
-    onOpenSettings: () -> Unit,
 ) {
+    // v0.9: search (left) + the centred Today/Upcoming/Done pill. Settings and the lists moved to
+    // the bottom-left lists button; the pill keeps symmetric insets so it stays screen-centred.
     Box(
         Modifier
             .fillMaxWidth()
@@ -610,7 +634,6 @@ private fun HeaderControls(
             style = PillStyle.Floating,
             modifier = Modifier.align(Alignment.Center).padding(horizontal = PillSpec.Control + 10.dp),
         )
-        CircleIconButton(AppIcons.Sliders, "Settings", onOpenSettings, Modifier.align(Alignment.CenterEnd), glass = true)
     }
 }
 

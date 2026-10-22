@@ -150,6 +150,13 @@ fun Composer(
     optionsAnchor: Modifier = Modifier,
     /** v0.7.3: collapse into the centred pill while scrolling down. Null = never collapses. */
     chrome: ComposerChrome? = null,
+    /**
+     * v0.9: a 48 dp control left of the capsule (the lists button), [ListsButtonGap] away. Expanded
+     * it sits at the left margin and the capsule takes the rest; collapsed, button + gap + pill
+     * form one pair centred on the screen. Both move on the same progress (same spring), so the
+     * pair's centre never moves.
+     */
+    leading: (@Composable () -> Unit)? = null,
 ) {
     val c = AppTheme.colors
     val type = AppTheme.type
@@ -307,7 +314,10 @@ fun Composer(
     // padding, navigation bar). Width follows the morph in the layout phase: the full width when
     // expanded, the pill + 8 dp each side when collapsed, so taps beside the pill reach the rows.
     val chipsH = remember { IntHolder() }
-    val pillWShield = with(androidx.compose.ui.platform.LocalDensity.current) { (PillWidth + 16.dp).roundToPx() }
+    val leadW = if (leading != null) ListsButtonSize + ListsButtonGap else 0.dp
+    // Collapsed: the pair (button + gap + pill) + 8 dp each side.
+    val pillWShield = with(androidx.compose.ui.platform.LocalDensity.current) { (PillWidth + leadW + 16.dp).roundToPx() }
+    val full = remember { IntHolder() }
     Layout(
         content = {
             Box(
@@ -338,8 +348,8 @@ fun Composer(
                     lists = lists,
                 )
             }
-            val full = remember { IntHolder() }
             val pillW = with(androidx.compose.ui.platform.LocalDensity.current) { PillWidth.roundToPx() }
+            Box(Modifier.fillMaxWidth()) {
             Layout(
                 content = {
                     // 0: the field (fixed width, never reflows during the morph; fades, clipped by the capsule).
@@ -457,7 +467,7 @@ fun Composer(
                     Box(Modifier.size(1.dp, 20.dp).drawBehind { drawRect(c.inkFill.copy(alpha = c.inkFill.alpha * k())) })
                 },
                 modifier = Modifier
-                    .padding(horizontal = 24.dp)
+                    .padding(start = 24.dp + leadW, end = 24.dp)
                     .fillMaxWidth()
                     // v0.7.3: ONE surface whose bounds go from the full composer to the centred pill,
                     // symmetric about the centre (layout phase reads the progress; no recomposition).
@@ -512,6 +522,22 @@ fun Composer(
                     val mid = (plusX + ButtonSize.roundToPx() + trailX) / 2
                     divider.place(mid - divider.width / 2 - left, (h - divider.height) / 2)
                 }
+            }
+            if (leading != null) {
+                // v0.9: the lists button, bottom-aligned with the capsule. x = 24 dp + k·(F − pill)/2,
+                // where F is the capsule's full width: collapsed, the button sits ListsButtonGap left
+                // of the centred pill and the pair is centred on the screen (layout phase only).
+                Box(
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .layout { m, cons ->
+                            val pl = m.measure(Constraints())
+                            val x = 24.dp.roundToPx() + ((full.v - pillW).coerceAtLeast(0) / 2f * k()).roundToInt()
+                            layout(pl.width, pl.height) { pl.place(x, 0) }
+                        }
+                        .graphicsLayer { alpha = chrome?.fade?.value ?: 1f },
+                ) { leading() }
+            }
             }
         }
         },

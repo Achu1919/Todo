@@ -83,7 +83,6 @@ fun TaskListPage(
     modifier: Modifier = Modifier,
     /** v0.7: list selector / focus indicator under the heading, and tapping the heading. */
     headingExtra: @Composable () -> Unit = {},
-    onHeadingClick: (() -> Unit)? = null,
 ) {
     val haptics = LocalHaptics.current
     var local by remember { mutableStateOf<List<ListItem>?>(null) }
@@ -112,10 +111,7 @@ fun TaskListPage(
     LazyColumn(state = listState, modifier = modifier.fillMaxSize(), contentPadding = contentPadding) {
         // Serif page heading (index 0), then the page items.
         item(key = "heading", contentType = "heading") {
-            Box(
-                if (onHeadingClick != null) Modifier.clickable(role = Role.Button, onClickLabel = "Choose list", onClick = onHeadingClick)
-                else Modifier,
-            ) { PageHeading(heading, caption, extra = headingExtra) }
+            PageHeading(heading, caption, extra = headingExtra)
         }
         items(shown, key = { it.key }, contentType = { it.contentType }) { item ->
             if (canDrag && reorderable(page, item)) {

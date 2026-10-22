@@ -189,6 +189,12 @@ fun TaskPanelHost(
      * inside the capsule as it nears the anchor, so the capsule lands as the pill itself.
      */
     ghost: (@Composable (id: Long) -> Unit)? = null,
+    /**
+     * v0.9: anchors near the bottom (the lists button) whose panel floats ABOVE them, anchored
+     * bottom-left: its bottom 10 dp over the anchor's top, its left on the anchor's left (clamped
+     * on screen), at most [AbovePanelMaxWidth] wide and [AbovePanelMaxFraction] of the screen tall.
+     */
+    above: Set<Long> = emptySet(),
     content: @Composable (id: Long) -> Unit,
 ) {
     val c = AppTheme.colors
@@ -363,6 +369,7 @@ fun TaskPanelHost(
                 reduced = reduced,
                 nested = nested,
                 ghost = if (style.morph && ghost != null) ({ ghost(id) }) else null,
+                aboveAnchor = id in above,
                 content = { content(id) },
             )
         }
@@ -378,6 +385,7 @@ private fun PanelLayout(
     reduced: Boolean,
     nested: NestedScrollConnection,
     ghost: (@Composable () -> Unit)?,
+    aboveAnchor: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val c = AppTheme.colors
@@ -494,12 +502,28 @@ private fun PanelLayout(
         val gap = 12.dp.roundToPx()
         val topLimit = status.getTop(this) + 12.dp.roundToPx()
         val bottomLimit = H - maxOf(ime.getBottom(this), nav.getBottom(this)) - gap
+        val from = motion.from
+        val ghostPlaceable = measurables.getOrNull(1)?.measure(Constraints(maxWidth = W, maxHeight = H))
+        if (aboveAnchor) {
+            // v0.9: above the anchor, bottom-left anchored.
+            val panelW = minOf(W - 2 * side, AbovePanelMaxWidth.roundToPx()).coerceAtLeast(0)
+            val bottom = from?.let { (it.top - AboveGap.toPx()).roundToInt() } ?: (bottomLimit - 64.dp.roundToPx())
+            val maxH = minOf(bottom - topLimit, (H * AbovePanelMaxFraction).roundToInt()).coerceAtLeast(0)
+            val placeable = measurables.first().measure(Constraints(minWidth = panelW, maxWidth = panelW, maxHeight = maxH))
+            val ph = placeable.height
+            val left = (from?.left?.roundToInt() ?: side).coerceIn(side, (W - side - panelW).coerceAtLeast(side))
+            val top = (bottom - ph).coerceAtLeast(topLimit)
+            target.rect = Rect(left.toFloat(), top.toFloat(), (left + panelW).toFloat(), (top + ph).toFloat())
+            motion.target = target.rect
+            return@Layout layout(W, H) {
+                placeable.place(left, top)
+                ghostPlaceable?.place(0, 0)
+            }
+        }
         val panelW = (W - 2 * side).coerceAtLeast(0)
         val maxH = (bottomLimit - topLimit).coerceAtLeast(0)
         val placeable = measurables.first().measure(Constraints(minWidth = panelW, maxWidth = panelW, maxHeight = maxH))
-        val ghostPlaceable = measurables.getOrNull(1)?.measure(Constraints(maxWidth = W, maxHeight = H))
         val ph = placeable.height
-        val from = motion.from
         // Near the card: start at the card's top (it grows downward), but keep fully on screen and above the IME.
         val preferred = from?.top?.roundToInt() ?: ((topLimit + bottomLimit - ph) / 2)
         val top = preferred.coerceAtMost(bottomLimit - ph).coerceAtLeast(topLimit)
@@ -519,6 +543,10 @@ private class RectHolder { var rect by mutableStateOf<Rect?>(null) }
 /** Panel geometry tokens (proportions from the reference's long-press menu). */
 val PanelRadius = 24.dp
 val PanelSide = 16.dp
+/** v0.9 panels above a bottom anchor (lists button). */
+val AbovePanelMaxWidth = 360.dp
+const val AbovePanelMaxFraction = 0.6f
+val AboveGap = 10.dp
 const val PanelFillAlpha = 0.94f
 
 /**

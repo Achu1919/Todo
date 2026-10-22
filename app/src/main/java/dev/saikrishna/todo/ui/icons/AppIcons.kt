@@ -225,6 +225,15 @@ object AppIcons {
         }
     }
 
+    /** v0.9 lists button: three stacked layers (a diamond and two chevrons under it). */
+    val Layers: ImageVector by lazy {
+        icon("Layers") {
+            stroke(1.9f) { moveTo(12f, 4f); lineTo(20f, 8.5f); lineTo(12f, 13f); lineTo(4f, 8.5f); close() }
+            stroke(1.9f) { moveTo(4f, 12.5f); lineTo(12f, 17f); lineTo(20f, 12.5f) }
+            stroke(1.9f) { moveTo(4f, 16.5f); lineTo(12f, 21f); lineTo(20f, 16.5f) }
+        }
+    }
+
     /** v0.8 planning: a small sun (circle + 8 short rays). */
     val Sun: ImageVector by lazy {
         icon("Sun") {
