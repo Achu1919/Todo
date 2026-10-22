@@ -674,6 +674,57 @@ Local git: one commit per step (`git log`): baseline 0.7.4, domain + schema 5, U
 ### Risks
 - ColorOS can defer or kill background jobs ("auto launch" off, strict battery optimisation). Glance renders through WorkManager, so updates may lag until Todo is opened once. Logcat tag `TodoWidget` (plus `WM-` and `GlanceAppWidget`) shows failures.
 
+## Milestone 9.1 (v0.9.1, code 17): theme toggle with circular reveal, no square press ripple
+
+### Theme toggle
+- **Button.** The empty header slot on the right now holds a 44 dp glass button that mirrors search, so the Today/Upcoming/Done pill stays centred.
+  - Icon (`SunMoonIcon`, our own drawing in Compose): a moon on the light theme, a sun on the dark theme.
+  - Morph (spring 0.35 s / 0.90): the 8 rays retract and turn 45°, the disc grows from r 4.5 to r 8, and a bite circle slides in from the top right. The outline is disc minus bite.
+- **Tap.** Toggles light ↔ dark. It overrides System and writes the existing theme setting, so Settings shows the new value. Light haptic tick.
+- **Long-press.** Opens a 200 dp glass dropdown under the button, right-aligned to it, with System / Light / Dark. It uses the same Menu morph and spring as the lists panel. It adds a `below` placement in `TaskPanelHost`.
+- **Reveal (`ui/theme/ThemeReveal.kt`).** The Activity is never recreated.
+  - **Snapshot.** We take a PixelCopy of the window region under the Compose root, so the Haze blur and any reveal already running are included. Re-rendering the GraphicsLayer is the fallback. That fallback differed by up to 46/255 in the blurred bars, so PixelCopy is the primary.
+  - **Switch.** In one state batch the theme switches underneath and the snapshot is drawn on top. A DstOut circle (antialiased) grows from the button centre to the farthest corner + 2 px. Ease-out (0.2, 0, 0, 1), 500 ms.
+  - **Hold until the snapshot.** On tap the old theme is held and the choice is stored at once; the override is cleared once DataStore matches.
+  - **Repeated taps.** A tap mid-reveal re-snapshots the mixed frame and reveals the other theme from the button. There is no queue.
+  - **Reduced motion.** The snapshot fades out over 200 ms.
+  - **System bars.** Status/nav bar icons flip (`enableEdgeToEdge` SystemBarStyle) once the circle has covered the whole status bar (the farther top corner), at frame 6 of 33 on the test device. With reduced motion they flip at the halfway point of the fade.
+- **Fix found by the reveal test.** `animateColorAsState` also tweened themed colours after a switch: task titles, chips, switches and filter chips showed a third state under the reveal. New `animateStateColor` animates only the on/off progress and reads the end colours fresh. Used in TaskRow, Controls, SearchScreen and PanelOrg.
+
+### Press feedback (no square ripple)
+- **App-wide.** `AppTheme` now provides `LocalIndication = SoftPress(ink)`. It is a faint ink tint (7 %, in 80 ms, out 180 ms) drawn only inside the node's bounds and clip: a circle for square nodes, otherwise a 12 dp rounded rect. It never spreads, and there is no focus or hover outline. This replaces Material's ripple for every `clickable`, `selectable` and `toggleable` that has no explicit indication:
+  - the header and composer buttons (+, mic, send, stop);
+  - parse chips;
+  - panel rows, picker rows and saved views;
+  - Settings rows, Lists and Templates rows;
+  - Plan buttons, snooze rows, subtask checks and tag chips.
+- **Checkbox (`CheckCircle`).** `indication = null`. While pressed, the mark scales to 0.9 on a spring, staying inside the ring. The fill/check pop is unchanged.
+  - **Bug fixed.** A long press lifts the row for dragging, and releasing it used to also tick the box. The toggle now ignores a release longer than the long-press timeout; pointer times are read in the Initial pass, nothing is consumed.
+- **Row body (`TaskRow`).** 0.98 scale spring plus the SoftPress tint, clipped to the card shape.
+- **Scale press.** `CircleIconButton`, the lists button and the theme toggle scale to 0.94.
+- **Not changed.** Material `TextButton`s inside the date/time picker dialogs still use the M3 ripple; it is pill-shaped and inside the dialog.
+
+### Verification
+- `ThemeRevealTest` (5, real MainActivity, frame by frame):
+  - **Light → dark and back.** Frame 0 == the old theme (0 px differ). The landing frame (frame 32, 528 ms) == the settled new theme (0 px). Every frame contains only old-theme or new-theme pixels, outside the button and a 3 px band on the edge, so no flash or black frame. The radius grows monotonically from 0 to 2454 px. The setting is stored, the bar icons flip, and it is the same Activity instance.
+  - **Three fast taps.** Each re-snapshot only adds the earlier edge band and the result ends on Dark. Filmstrip `theme-reveal-retarget-filmstrip.png`.
+  - **Reduced motion.** Crossfade, landing at 224 ms, no circle.
+  - **Long-press menu.** It sits below the button, right-aligned; Dark and then System are stored.
+  - **Other pages.** It works on Upcoming and Done.
+  - Filmstrip `out/shots/theme-reveal-filmstrip.png` (top: light → dark, bottom: dark → light).
+- `PressFeedbackTest` (5):
+  - **Checkbox press.** Tap length (160 ms) in light and dark, and held 480 ms (just under the long-press lift): 0 px change outside the ring + 2 dp on any frame. For 12 frames after release: 0 px change around the checkbox, i.e. its 48 dp box + 24 dp, outside the ring and left of the title.
+  - **Row press.** Pixels change inside the card and none outside it.
+  - **Long-press release.** Does not complete the task; a normal tap still does.
+  - Filmstrips `checkbox-press-*-filmstrip.png`.
+- Shots: `home-header-*` (now with the toggle) and `theme-menu-light/dark`.
+
+### Risks
+- PixelCopy latency on a real device adds about 1 frame before the reveal starts; in Robolectric it was 3 frames. The old theme stays on screen during that time, so there is no visual glitch.
+- The snapshot is a full-screen ARGB bitmap, about 10 MB at 1080×2340, held for about 0.5 s.
+- An OEM that fails PixelCopy falls back to the layer re-render, which may show a slight blur mismatch on frame 0.
+- Settings → Theme still switches instantly, without the reveal.
+
 ## Milestone 9 (v0.9.0, code 16): lists button, lists panel, lighter header
 
 ### What changed
@@ -753,7 +804,7 @@ Local git: one commit per step (`git log`): baseline 0.7.4, domain + schema 5, U
 
 ## Tests
 
-`./gradlew testDebugUnitTest`: **201 tests, all pass** (v0.9: +`ListsPanelTest` 4, +`PlanLineTest` 5, +`ComposerCollapseTest` 2, +`ComposerTouchTest` 1, `ListPillMorphTest` → `ListsPanelMorphTest`; v0.8.1: +`WidgetSessionTest` 2, +`TodayWidgetGlanceTest` 2; v0.8: +`ShareCaptureTest` 9, +`ViewFilterTest` 4, +`PlannerTest` 3, +`MigrationTest` 2 (4 → 5, 2 → 5), +`WidgetDataTest` 3, +`PlanReminderTest` 1, +`CaptureIntentTest` 3; v0.7.4: +`ComposerTouchTest` 4; v0.7.3: +`CollapseMachineTest` 8, +`ComposerCollapseTest` 4; v0.7.2: +`BottomFadeTest` 3; v0.7.1: +`ListPillMorphTest` 2; v0.7: +`QuickParseOrgTest` 10, +`FocusTest` 7, +`ReorderTest` 7, +`TemplatesTest` 6, +`OrgRepositoryTest` 9, +`MigrationTest` 1 (3 → 4), +`NotificationOpenTest` 4; v0.6.2: +`HeaderEdgeTest` 3; v0.6.1: +`TransitionTest` 6; v0.6: +`QuickParseTest` 21, +`RepeatRuleTest` 12, +`SnoozeTest` 6, +`ComposerTest` 2 (chips appear, submit carries the parse, tapping a chip keeps the words), +`MigrationTest` 1 (v2 → v3 preserves data), +`RepeatRepositoryTest` 2; v0.5: +`PillFirstFrameTest` 1, +`TaskPanelTest` 3). `-Pshots --tests '*ScreenshotTest*'`: **52** screenshot tests (v0.9: −6 list-pill/picker, +14 header/bottom-row/pair/home/lists-panel) (v0.8: +10 in `V08ScreenshotTest`: capture light/dark + open filmstrip + save/confirm, plan light/dark + keep filmstrip + summary, search filters light/dark, widget + preview light/dark) (v0.7.3: +`ComposerPillScreenshotTest` 2) (v0.7.2: +3 `ComposerFrostScreenshotTest`; v0.7.1: +4 pill shots; v0.7: +12 in `OrgScreenshotTest`), all pass. `SectionsTest` was replaced by:
+`./gradlew testDebugUnitTest`: **211 tests, all pass** (v0.9.1: +`ThemeRevealTest` 5, +`PressFeedbackTest` 5; v0.9: +`ListsPanelTest` 4, +`PlanLineTest` 5, +`ComposerCollapseTest` 2, +`ComposerTouchTest` 1, `ListPillMorphTest` → `ListsPanelMorphTest`; v0.8.1: +`WidgetSessionTest` 2, +`TodayWidgetGlanceTest` 2; v0.8: +`ShareCaptureTest` 9, +`ViewFilterTest` 4, +`PlannerTest` 3, +`MigrationTest` 2 (4 → 5, 2 → 5), +`WidgetDataTest` 3, +`PlanReminderTest` 1, +`CaptureIntentTest` 3; v0.7.4: +`ComposerTouchTest` 4; v0.7.3: +`CollapseMachineTest` 8, +`ComposerCollapseTest` 4; v0.7.2: +`BottomFadeTest` 3; v0.7.1: +`ListPillMorphTest` 2; v0.7: +`QuickParseOrgTest` 10, +`FocusTest` 7, +`ReorderTest` 7, +`TemplatesTest` 6, +`OrgRepositoryTest` 9, +`MigrationTest` 1 (3 → 4), +`NotificationOpenTest` 4; v0.6.2: +`HeaderEdgeTest` 3; v0.6.1: +`TransitionTest` 6; v0.6: +`QuickParseTest` 21, +`RepeatRuleTest` 12, +`SnoozeTest` 6, +`ComposerTest` 2 (chips appear, submit carries the parse, tapping a chip keeps the words), +`MigrationTest` 1 (v2 → v3 preserves data), +`RepeatRepositoryTest` 2; v0.5: +`PillFirstFrameTest` 1, +`TaskPanelTest` 3). `-Pshots --tests '*ScreenshotTest*'`: **54** screenshot tests (v0.9.1: +`theme-menu-*` 2) (v0.9: −6 list-pill/picker, +14 header/bottom-row/pair/home/lists-panel) (v0.8: +10 in `V08ScreenshotTest`: capture light/dark + open filmstrip + save/confirm, plan light/dark + keep filmstrip + summary, search filters light/dark, widget + preview light/dark) (v0.7.3: +`ComposerPillScreenshotTest` 2) (v0.7.2: +3 `ComposerFrostScreenshotTest`; v0.7.1: +4 pill shots; v0.7: +12 in `OrgScreenshotTest`), all pass. `SectionsTest` was replaced by:
 - `PagesTest` (11): Today/Upcoming/Done classification; Today = open today/overdue/undated in creation order with "Overdue · Yesterday"; Upcoming grouped by day with headers (Tomorrow / Friday / Wed, 28 Oct) and no repeated date; Done grouped by completion day newest first with Clear done count; empty states and All clear count; leaving rows stay on their page (dwell vs collapsing, reopen from Done); day labels (Locale.UK); row meta; overrides + hidden deletes; due chips (next week = next Monday); entrance tracker baseline + forget.
 - `SettingsTest` (4): defaults when nothing stored, stored values, unknown theme → System, `ThemeMode.isDark`.
 - `SearchTest` (3): blank query, title+notes case-insensitive match with open-first order, no match.
@@ -775,7 +826,7 @@ Milestone 1 tests:
 7. Header is glass with title + search/settings + filter pill; the open-task count digit slide was dropped with the old header. Launch entrance §6.1 not done (step 9). §6.8 inline expand skipped; v0.5 replaces the sheet with the contextual floating panel (6.7-style).
 8. In-app reduce motion / haptics / theme are real settings (DataStore). Theme changes switch instantly (no animated palette crossfade).
 9. `Settings.System.HAPTIC_FEEDBACK_ENABLED` is deprecated in SDK 37 but is still read (suppressed) as the spec asks.
-10. Debug APK (milestone 2 build) is about 31 MB because it is unminified. **Release APK (v0.9.0 / code 16): 5,674,827 bytes (about 5.7 MB), apksigner verify OK (V2, Android Debug), aapt2 badging versionCode 16 / versionName 0.9.0, `scripts/verify_release.py` OK (42 by-name checks).** v0.8.1 / code 15: 5,658,443 bytes. v0.8.0 / code 14: 5,647,619 bytes. v0.7.4 / code 13: 4,655,871 bytes. v0.7.1 / code 10: 4,639,487 bytes. v0.7.0 / code 9: 4,623,103 bytes. v0.6.2 / code 8: 4,442,879 bytes. v0.6.1 / code 7: 4,442,879 bytes (Navigation 3 removed). v0.6.0 / code 6: 4,476,032 bytes. v0.5.0 / code 5: 4,301,408 bytes (about 4.3 MB). Milestone 4 (v0.4.0 / code 4): 4,285,024 bytes (about 4.3 MB; +0.9 MB for the two Newsreader variable fonts, minus Instrument Serif). Milestone 3 was 3,769,333 bytes, with R8, resource shrinking, baseline profile, debug-key signing (apksigner verify OK, V2).
+10. Debug APK (milestone 2 build) is about 31 MB because it is unminified. **Release APK (v0.9.1 / code 17): 5,691,211 bytes (about 5.7 MB), apksigner verify OK (V2, Android Debug), aapt2 badging versionCode 17 / versionName 0.9.1, `scripts/verify_release.py` OK (42 by-name checks).** v0.9.0 / code 16: 5,674,827 bytes. v0.8.1 / code 15: 5,658,443 bytes. v0.8.0 / code 14: 5,647,619 bytes. v0.7.4 / code 13: 4,655,871 bytes. v0.7.1 / code 10: 4,639,487 bytes. v0.7.0 / code 9: 4,623,103 bytes. v0.6.2 / code 8: 4,442,879 bytes. v0.6.1 / code 7: 4,442,879 bytes (Navigation 3 removed). v0.6.0 / code 6: 4,476,032 bytes. v0.5.0 / code 5: 4,301,408 bytes (about 4.3 MB). Milestone 4 (v0.4.0 / code 4): 4,285,024 bytes (about 4.3 MB; +0.9 MB for the two Newsreader variable fonts, minus Instrument Serif). Milestone 3 was 3,769,333 bytes, with R8, resource shrinking, baseline profile, debug-key signing (apksigner verify OK, V2).
 11. Auto-scroll for a new row that is fully off-screen uses `animateScrollToItem(index)`, which lands it at the top of the viewport unless it is the last list item. The common case (a partly hidden row) scrolls by the overflow on Smooth.
 12. Swipe-to-delete fling velocity threshold is M3's internal default (not configurable in 1.4.0); only the 35 % positional threshold is set. Swipe is end→start only.
 13. "Next week" chip = next Monday. Search results are not grouped by page. Licences screen lists libraries by name + licence (only the font OFL texts are bundled).

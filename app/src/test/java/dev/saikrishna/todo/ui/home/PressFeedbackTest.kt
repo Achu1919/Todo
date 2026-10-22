@@ -157,6 +157,10 @@ class PressFeedbackTest {
         val after = rule.onNode(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Checkbox) and hasContentDescription("Task number 2"), useUnmergedTree = true)
             .fetchSemanticsNode().config[SemanticsProperties.StateDescription]
         org.junit.Assert.assertEquals("Completed", after)
+        // Let the completion's Room write finish before the in-memory DB is closed.
+        rule.mainClock.autoAdvance = true
+        rule.mainClock.advanceTimeBy(3_000); rule.waitForIdle()
+        Thread.sleep(300); rule.waitForIdle()
     }
 
     @Test fun rowPressStaysInsideTheCard() {
