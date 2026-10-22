@@ -321,7 +321,9 @@ class TransitionTest {
 
     /** v0.9: Settings lives in the lists panel (bottom-left lists button), no longer in the header. */
     private fun openListsPanel() {
+        rule.mainClock.autoAdvance = true
         rule.onNodeWithTag("lists-button").performSemanticsAction(SemanticsActions.OnClick)
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("lists-panel", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
         rule.mainClock.advanceTimeBy(1_000)
     }
 
@@ -329,4 +331,5 @@ class TransitionTest {
         openListsPanel()
         rule.onNodeWithText("Settings").performSemanticsAction(SemanticsActions.OnClick)
     }
+
 }
