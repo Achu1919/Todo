@@ -49,6 +49,8 @@ import java.util.Locale
 object MenuIds {
     const val LIST_PICKER = -1L
     const val ADD_MENU = -2L
+    /** v0.9.1 theme dropdown (long-press on the header theme toggle). */
+    const val THEME_MENU = -3L
 }
 
 /** What the lists button says (v0.9; was the list chip under the heading). Pure, built from the current selection and focus. */

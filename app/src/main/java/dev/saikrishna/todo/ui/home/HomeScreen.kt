@@ -96,12 +96,18 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import dev.saikrishna.todo.ui.theme.AppTheme
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInRoot
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.LocalDate
 import dev.saikrishna.todo.domain.PlanLine
+import dev.saikrishna.todo.data.ThemeMode
+import dev.saikrishna.todo.ui.theme.LocalThemeReveal
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.runtime.collectAsState
 import dev.saikrishna.todo.ui.components.GlassLevel
 import androidx.compose.foundation.layout.ime
 import java.time.LocalDateTime
@@ -305,6 +311,19 @@ fun HomeScreen(
         }
     }
     HomeTestHooks.chrome = chrome
+    // v0.9.1 theme toggle: tap = light <-> dark (overrides System), stored in the theme setting;
+    // the switch is a circular reveal from the button (ThemeReveal), retargeted if tapped again.
+    val darkNow = AppTheme.colors.isDark
+    val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val reveal = LocalThemeReveal.current
+    var themeCenter by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    val storedTheme = vm.settings.collectAsState().value?.theme ?: ThemeMode.System
+    val applyTheme: (ThemeMode) -> Unit = { mode ->
+        haptics.tick()
+        val to = mode.isDark(systemDark)
+        if (reveal == null || to == darkNow) vm.setTheme(mode)
+        else reveal.switch(darkNow, to, themeCenter) { vm.setTheme(mode) }
+    }
     var draggingRow by remember { mutableStateOf(false) }
     chrome.list = listStates.getValue(filter)
     SideEffect { chrome.externalBlock = undo != null || draggingRow }
@@ -424,6 +443,15 @@ fun HomeScreen(
                     filter = filter,
                     onFilter = { chrome.dismiss(); filter = it },
                     onOpenSearch = onOpenSearch,
+                    themeButton = {
+                        ThemeToggleButton(
+                            dark = darkNow,
+                            onToggle = { applyTheme(if (darkNow) ThemeMode.Light else ThemeMode.Dark) },
+                            onMenu = { haptics.tick(); chrome.dismiss(); menu = MenuIds.THEME_MENU },
+                            modifier = Modifier.onGloballyPositioned { themeCenter = it.boundsInRoot().center },
+                            anchor = Modifier.panelAnchor(menuAnchors, MenuIds.THEME_MENU),
+                        )
+                    },
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .onSizeChanged { topPx.intValue = it.height },
@@ -552,8 +580,12 @@ fun HomeScreen(
             // v0.7.1: shared-bounds morph, Morph spring.
             style = HomeTestHooks.menuStyle ?: PanelStyle.Menu,
             bareAnchors = setOf(MenuIds.ADD_MENU),
-            ghost = { id -> if (id == MenuIds.LIST_PICKER) ListsButtonContent(chip) },
+            ghost = { id ->
+                if (id == MenuIds.LIST_PICKER) ListsButtonContent(chip)
+                if (id == MenuIds.THEME_MENU) ThemeToggleContent(darkNow)
+            },
             above = setOf(MenuIds.LIST_PICKER),
+            below = setOf(MenuIds.THEME_MENU),
             anchorLevels = mapOf(MenuIds.LIST_PICKER to GlassLevel.Mid),
         ) { id ->
             when (id) {
@@ -575,6 +607,10 @@ fun HomeScreen(
                         onOpenSearch()
                     },
                     onSettings = { menu = null; onOpenSettings() },
+                )
+                MenuIds.THEME_MENU -> ThemeMenuContent(
+                    current = storedTheme,
+                    onSelect = { m -> menu = null; applyTheme(m) },
                 )
                 MenuIds.ADD_MENU -> AddMenuContent(
                     templates = templates,
@@ -603,13 +639,14 @@ private fun HomeHeader(
     filter: Filter,
     onFilter: (Filter) -> Unit,
     onOpenSearch: () -> Unit,
+    themeButton: @Composable BoxScope.() -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     Box(modifier.fillMaxWidth()) {
         // Blurred, tinted edge behind the controls, fading out (eased) by 30 dp below them.
         GlassEdgeTop(solidHeight = statusTop + HeaderTop + PillSpec.Height)
-        HeaderControls(filter, onFilter, onOpenSearch)
+        HeaderControls(filter, onFilter, onOpenSearch, themeButton)
     }
 }
 
@@ -618,7 +655,9 @@ private fun HeaderControls(
     filter: Filter,
     onFilter: (Filter) -> Unit,
     onOpenSearch: () -> Unit,
+    themeButton: @Composable BoxScope.() -> Unit,
 ) {
+    // v0.9.1: the theme toggle mirrors search on the right (same 44 dp glass circle).
     // v0.9: search (left) + the centred Today/Upcoming/Done pill. Settings and the lists moved to
     // the bottom-left lists button; the pill keeps symmetric insets so it stays screen-centred.
     Box(
@@ -636,6 +675,7 @@ private fun HeaderControls(
             style = PillStyle.Floating,
             modifier = Modifier.align(Alignment.Center).padding(horizontal = PillSpec.Control + 10.dp),
         )
+        Box(Modifier.align(Alignment.CenterEnd)) { themeButton() }
     }
 }
 

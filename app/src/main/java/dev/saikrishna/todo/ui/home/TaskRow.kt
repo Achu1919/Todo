@@ -1,7 +1,7 @@
 package dev.saikrishna.todo.ui.home
 
 import dev.saikrishna.todo.ui.components.pressScale
-import androidx.compose.animation.animateColorAsState
+import dev.saikrishna.todo.ui.components.animateStateColor
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -74,9 +74,7 @@ fun TaskRow(
             }
         }
     }
-    val titleColor by animateColorAsState(
-        if (checked) c.inkTertiary else c.ink, Tweens.select(), label = "title colour",
-    )
+    val titleColor by animateStateColor(checked, c.inkTertiary, c.ink, Tweens.select(), label = "title colour")
 
     // v0.9.1: row-body press = a gentle 0.98 scale spring + the faint in-card tint (SoftPress,
     // clipped to the card shape), never Material's grey ripple.

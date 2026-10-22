@@ -73,7 +73,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.animation.animateColorAsState
+import dev.saikrishna.todo.ui.components.animateStateColor
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.text.BasicText
 import dev.saikrishna.todo.ui.home.rememberToday
@@ -344,8 +344,8 @@ private fun FilterChip(
     onClick: () -> Unit,
 ) {
     val c = AppTheme.colors
-    val fill by animateColorAsState(if (selected) c.ink else c.glassFill, Tweens.select(), label = "filter fill")
-    val text by animateColorAsState(if (selected) c.onInk else c.ink, Tweens.select(), label = "filter text")
+    val fill by animateStateColor(selected, c.ink, c.glassFill, Tweens.select(), label = "filter fill")
+    val text by animateStateColor(selected, c.onInk, c.ink, Tweens.select(), label = "filter text")
     Row(
         Modifier
             .heightIn(min = 34.dp)

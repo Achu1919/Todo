@@ -19,12 +19,17 @@ import dev.saikrishna.todo.ui.motion.ProvideHaptics
 import dev.saikrishna.todo.ui.motion.ProvideMotion
 import dev.saikrishna.todo.ui.nav.AppNav
 import dev.saikrishna.todo.ui.theme.AppTheme
+import dev.saikrishna.todo.ui.theme.ThemeReveal
+import dev.saikrishna.todo.ui.theme.ThemeRevealHost
 import dev.saikrishna.todo.ui.theme.InterFamily
 import dev.saikrishna.todo.ui.theme.JetBrainsMonoFamily
 import dev.saikrishna.todo.ui.theme.SerifFamily
 import androidx.compose.ui.platform.LocalFontFamilyResolver
 
 class MainActivity : ComponentActivity() {
+    /** v0.9.1 in-place theme switch (kept across recompositions; not across process death). */
+    internal val reveal = ThemeReveal()
+
     private val vm: TodoViewModel by viewModels {
         val app = application as TodoApp
         TodoViewModel.factory(app.repository, app.settings)
@@ -51,21 +56,33 @@ class MainActivity : ComponentActivity() {
             }
             val stored by vm.settings.collectAsStateWithLifecycle()
             val settings = stored ?: return@setContent
-            val dark = settings.theme.isDark(isSystemInDarkTheme())
-            LaunchedEffect(dark) {
-                val bars = if (dark) SystemBarStyle.dark(Color.TRANSPARENT)
-                else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
-                enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
-                window.isNavigationBarContrastEnforced = false
-            }
+            val storedDark = settings.theme.isDark(isSystemInDarkTheme())
+            // v0.9.1: the header toggle switches the theme in place (circular reveal), never by
+            // recreating the Activity; the override holds until the stored setting matches.
+            val override = reveal.overrideDark
+            val holding = reveal.holding
+            LaunchedEffect(storedDark, override, holding) { if (!holding && override != null && override == storedDark) reveal.overrideDark = null }
+            val dark = override ?: storedDark
+            val barsDark = reveal.barsDark ?: dark
+            LaunchedEffect(barsDark) { applySystemBars(barsDark) }
             ProvideMotion(userPrefReduceMotion = settings.reduceMotion) {
-                AppTheme(darkTheme = dark) {
-                    ProvideHaptics(userEnabled = settings.haptics) {
-                        AppNav(vm)
+                ThemeRevealHost(reveal) {
+                    AppTheme(darkTheme = dark) {
+                        ProvideHaptics(userEnabled = settings.haptics) {
+                            AppNav(vm)
+                        }
                     }
                 }
             }
         }
+    }
+
+    /** Status/navigation bar icons: light icons on the dark theme and vice versa. */
+    internal fun applySystemBars(dark: Boolean) {
+        val bars = if (dark) SystemBarStyle.dark(Color.TRANSPARENT)
+        else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+        enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
+        window.isNavigationBarContrastEnforced = false
     }
 
     override fun onNewIntent(intent: Intent) {

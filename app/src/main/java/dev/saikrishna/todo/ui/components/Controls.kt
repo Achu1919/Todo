@@ -1,6 +1,5 @@
 package dev.saikrishna.todo.ui.components
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -194,8 +193,8 @@ fun <T> SegmentedPill(
 @Composable
 fun PillChip(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val c = AppTheme.colors
-    val fill by animateColorAsState(if (selected) c.ink else c.inkFill, Tweens.select(), label = "chip fill")
-    val text by animateColorAsState(if (selected) c.onInk else c.ink, Tweens.select(), label = "chip text")
+    val fill by animateStateColor(selected, c.ink, c.inkFill, Tweens.select(), label = "chip fill")
+    val text by animateStateColor(selected, c.onInk, c.ink, Tweens.select(), label = "chip text")
     Box(
         modifier
             .height(PillSpec.ChipHeight)
@@ -217,8 +216,8 @@ fun MotionSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, label: St
     val reduced = LocalReducedMotion.current
     val p = remember { Animatable(if (checked) 1f else 0f) }
     LaunchedEffect(checked) { p.animateTo(if (checked) 1f else 0f, if (reduced) Tweens.reduced() else Springs.Quick.float) }
-    val track by animateColorAsState(if (checked) c.ink else c.inkStroke, Tweens.select(), label = "switch track")
-    val thumb by animateColorAsState(if (checked) c.onInk else c.glassSolid.copy(alpha = 1f), Tweens.select(), label = "switch thumb")
+    val track by animateStateColor(checked, c.ink, c.inkStroke, Tweens.select(), label = "switch track")
+    val thumb by animateStateColor(checked, c.onInk, c.glassSolid.copy(alpha = 1f), Tweens.select(), label = "switch thumb")
     Box(
         modifier
             .size(width = 52.dp, height = 32.dp)

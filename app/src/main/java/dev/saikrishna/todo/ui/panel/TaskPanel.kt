@@ -199,6 +199,8 @@ fun TaskPanelHost(
      * on screen), at most [AbovePanelMaxWidth] wide and [AbovePanelMaxFraction] of the screen tall.
      */
     above: Set<Long> = emptySet(),
+    /** v0.9.1: small dropdowns BELOW their anchor, right-aligned to it, [BelowPanelWidth] wide. */
+    below: Set<Long> = emptySet(),
     content: @Composable (id: Long) -> Unit,
 ) {
     val c = AppTheme.colors
@@ -375,6 +377,7 @@ fun TaskPanelHost(
                 nested = nested,
                 ghost = if (style.morph && ghost != null) ({ ghost(id) }) else null,
                 aboveAnchor = id in above,
+                belowAnchor = id in below,
                 content = { content(id) },
             )
         }
@@ -391,6 +394,7 @@ private fun PanelLayout(
     nested: NestedScrollConnection,
     ghost: (@Composable () -> Unit)?,
     aboveAnchor: Boolean = false,
+    belowAnchor: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val c = AppTheme.colors
@@ -509,6 +513,22 @@ private fun PanelLayout(
         val bottomLimit = H - maxOf(ime.getBottom(this), nav.getBottom(this)) - gap
         val from = motion.from
         val ghostPlaceable = measurables.getOrNull(1)?.measure(Constraints(maxWidth = W, maxHeight = H))
+        if (belowAnchor) {
+            // v0.9.1: a small dropdown under the anchor, its right edge on the anchor's right.
+            val panelW = minOf(W - 2 * side, BelowPanelWidth.roundToPx()).coerceAtLeast(0)
+            val top = from?.let { (it.bottom + AboveGap.toPx()).roundToInt() } ?: topLimit
+            val maxH = (bottomLimit - top).coerceAtLeast(0)
+            val placeable = measurables.first().measure(Constraints(minWidth = panelW, maxWidth = panelW, maxHeight = maxH))
+            val ph = placeable.height
+            val right = from?.right?.roundToInt() ?: (W - side)
+            val left = (right - panelW).coerceIn(side, (W - side - panelW).coerceAtLeast(side))
+            target.rect = Rect(left.toFloat(), top.toFloat(), (left + panelW).toFloat(), (top + ph).toFloat())
+            motion.target = target.rect
+            return@Layout layout(W, H) {
+                placeable.place(left, top)
+                ghostPlaceable?.place(0, 0)
+            }
+        }
         if (aboveAnchor) {
             // v0.9: above the anchor, bottom-left anchored.
             val panelW = minOf(W - 2 * side, AbovePanelMaxWidth.roundToPx()).coerceAtLeast(0)
@@ -552,6 +572,8 @@ val PanelSide = 16.dp
 val AbovePanelMaxWidth = 360.dp
 const val AbovePanelMaxFraction = 0.6f
 val AboveGap = 10.dp
+/** v0.9.1 dropdowns below an anchor (theme menu). */
+val BelowPanelWidth = 200.dp
 const val PanelFillAlpha = 0.94f
 
 /**

@@ -1,6 +1,6 @@
 package dev.saikrishna.todo.ui.panel
 
-import androidx.compose.animation.animateColorAsState
+import dev.saikrishna.todo.ui.components.animateStateColor
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -68,8 +68,8 @@ import sh.calvin.reorderable.ReorderableColumn
 @Composable
 fun ListPillChip(list: TaskList, selected: Boolean, onClick: () -> Unit) {
     val c = AppTheme.colors
-    val fill by animateColorAsState(if (selected) c.ink else c.inkFill, Tweens.select(), label = "list chip fill")
-    val text by animateColorAsState(if (selected) c.onInk else c.ink, Tweens.select(), label = "list chip text")
+    val fill by animateStateColor(selected, c.ink, c.inkFill, Tweens.select(), label = "list chip fill")
+    val text by animateStateColor(selected, c.onInk, c.ink, Tweens.select(), label = "list chip text")
     Row(
         Modifier
             .height(PillSpec.ChipHeight)
@@ -257,7 +257,7 @@ fun SubtaskList(
 @Composable
 private fun MiniCheck(done: Boolean) {
     val c = AppTheme.colors
-    val fill by animateColorAsState(if (done) c.ink else c.ink.copy(alpha = 0f), Tweens.select(), label = "mini check")
+    val fill by animateStateColor(done, c.ink, c.ink.copy(alpha = 0f), Tweens.select(), label = "mini check")
     Box(
         Modifier
             .size(20.dp)
