@@ -161,6 +161,65 @@ class V10ScreenshotTest {
         save(bmp, "icon-preview")
     }
 
+    /**
+     * v0.10.1: icon A old (pure-white disc, debug-only copy of the v0.10.0 drawable) vs new
+     * (off-white #E6E8EE → #DCE0E8) on light and dark launchers, and on the splash backgrounds
+     * (the splash icon is the same background + foreground layers).
+     */
+    @Test fun iconADullPreview() {
+        val old = a.copy(fg = R.drawable.icon_a_foreground_v0100)
+        val w = 1080; val h = 1560
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        val head = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 36f; typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD) }
+        val label = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 30f; textAlign = Paint.Align.CENTER }
+        val bands = listOf(
+            Triple("Light launcher", intArrayOf(0xFFB9C6E4.toInt(), 0xFFEEF1F8.toInt()), false),
+            Triple("Dark launcher", intArrayOf(0xFF0B0F1A.toInt(), 0xFF27304A.toInt()), true),
+            Triple("Splash: light | dark", intArrayOf(0xFFCDD6E5.toInt(), 0xFFCDD6E5.toInt()), false),
+        )
+        val bandH = h / 3
+        bands.forEachIndexed { i, (title, colors, dark) ->
+            val top = i * bandH.toFloat()
+            val p = Paint().apply { shader = LinearGradient(0f, top, 0f, top + bandH, colors[0], colors[1], Shader.TileMode.CLAMP) }
+            c.drawRect(0f, top, w.toFloat(), top + bandH, p)
+            if (i == 2) c.drawRect(w / 2f, top, w.toFloat(), top + bandH, Paint().apply { color = 0xFF1B2231.toInt() })
+            head.color = if (dark) 0xFFE8ECF5.toInt() else 0xFF1C2233.toInt()
+            c.drawText(title, 40f, top + 64f, head)
+            if (i < 2) {
+                label.color = head.color
+                // 256 px pair, then the 48 dp (126 px) pair.
+                val big = 256f
+                drawIcon(c, old, 60f, top + 110f, big, circle(big))
+                drawIcon(c, a, 360f, top + 110f, big, circle(big))
+                c.drawText("old v0.10.0", 60f + big / 2, top + 110f + big + 44f, label)
+                c.drawText("new v0.10.1", 360f + big / 2, top + 110f + big + 44f, label)
+                val small = 126f
+                drawIcon(c, old, 700f, top + 175f, small, circle(small))
+                drawIcon(c, a, 880f, top + 175f, small, circle(small))
+                c.drawText("old · 48dp", 700f + small / 2, top + 175f + small + 44f, label)
+                c.drawText("new · 48dp", 880f + small / 2, top + 175f + small + 44f, label)
+            } else {
+                // Splash: the icon masked to a circle (2/3 of the 240 dp icon area ≈ 160 dp → 280 px here).
+                val s = 220f
+                for ((k, x0) in listOf(0f, w / 2f).withIndex()) {
+                    label.color = if (k == 0) 0xFF1C2233.toInt() else 0xFFE8ECF5.toInt()
+                    drawIcon(c, old, x0 + 20f, top + 120f, s, circle(s))
+                    drawIcon(c, a, x0 + 290f, top + 120f, s, circle(s))
+                    c.drawText("old", x0 + 20f + s / 2, top + 120f + s + 44f, label)
+                    c.drawText("new", x0 + 290f + s / 2, top + 120f + s + 44f, label)
+                }
+            }
+        }
+        save(bmp, "icon-a-dull")
+        // The disc centre-top is no longer pure white.
+        val probe = Bitmap.createBitmap(512, 512, Bitmap.Config.ARGB_8888)
+        drawIcon(Canvas(probe), a, 0f, 0f, 512f, circle(512f))
+        val px = probe.getPixel(256, 160)
+        assertTrue("disc still white: ${Integer.toHexString(px)}", Color.red(px) < 240 && Color.blue(px) < 245)
+        save(probe, "icon-a")
+    }
+
     // ---- Settings → Data and the import sheet ----------------------------------------------
 
     private var step by mutableStateOf<ImportStep?>(null)
