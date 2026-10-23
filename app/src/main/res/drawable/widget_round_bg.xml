@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v0.12 W2: the 1x1 round "+" in our icon A gradient, so it sits in the grid like an app icon. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <gradient android:angle="315" android:startColor="#FF3E4FB4" android:endColor="#FF7489DB" />
+    <stroke android:width="1dp" android:color="#40FFFFFF" />
+</shape>

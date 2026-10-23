@@ -3,4 +3,13 @@
          from the single `appName` constant in app/build.gradle.kts (v0.10). -->
     <string name="widget_today_label">Today</string>
     <string name="widget_today_description">Today\'s tasks: tick them off, open one, or add a new one.</string>
+    <!-- v0.12 add-task widgets -->
+    <string name="widget_hub_label">Todo hub</string>
+    <string name="widget_quick_label">Quick lists</string>
+    <string name="widget_round_label">Add (round)</string>
+    <string name="widget_pill_label">Add a task</string>
+    <string name="widget_pill_description">Add a task in one tap, or speak it.</string>
+    <string name="widget_round_description">A round + that opens the add-task card.</string>
+    <string name="widget_quick_description">Add straight to Today or one of your first lists.</string>
+    <string name="widget_hub_description">What\'s next, plus add, voice and plan your day.</string>
 </resources>

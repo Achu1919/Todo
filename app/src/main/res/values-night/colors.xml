@@ -13,4 +13,11 @@
     <color name="widget_ring">#FF60646E</color>
     <color name="widget_on_ink">#15161A</color>
     <color name="widget_danger">#EC5F63</color>
+    <!-- v0.12 add-task widgets (glass, soft discs, accent +) -->
+    <color name="widget_glass_top">#C2262B3D</color>
+    <color name="widget_glass_bottom">#A81A1D2A</color>
+    <color name="widget_glass_rim">#29FFFFFF</color>
+    <color name="widget_soft">#1AF1F2F5</color>
+    <color name="widget_accent">#FF7247</color>
+    <color name="widget_accent_end">#D1FF7247</color>
 </resources>

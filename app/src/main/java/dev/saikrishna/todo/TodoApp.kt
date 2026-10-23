@@ -23,6 +23,7 @@ class TodoApp : Application() {
         dev.saikrishna.todo.data.BackupManager(database, settings, BuildConfig.VERSION_NAME) { before, after ->
             Reminders.rearm(this, before, after, System.currentTimeMillis(), repository.zone())
             runCatching { dev.saikrishna.todo.widget.TodayWidget.refresh(this) }
+            runCatching { dev.saikrishna.todo.widget.QuickWidgets.refresh(this) }
         }
     }
     /** v0.10: the launch entrance has played in this process (warm starts don't replay it). */
@@ -36,6 +37,7 @@ class TodoApp : Application() {
         // v0.8: the morning planning alarm follows its setting (and is re-armed at every start).
         appScope.launch { settings.plan.distinctUntilChanged().collect { dev.saikrishna.todo.reminders.PlanReminder.sync(this@TodoApp, it) } }
         startWidgetSync()
+        startQuickWidgetSync()
     }
 
     /** v0.8: the Today widget redraws whenever what it shows changes (not on every write). */
@@ -47,6 +49,16 @@ class TodoApp : Application() {
             }
             .distinctUntilChanged()
             .collect { runCatching { dev.saikrishna.todo.widget.TodayWidget.refresh(this@TodoApp) } }
+    }
+
+    /** v0.12: the quick-lists and hub widgets redraw when their chips or next task change. */
+    private fun startQuickWidgetSync() = appScope.launch {
+        kotlinx.coroutines.flow.combine(repository.tasks, repository.lists) { tasks, lists ->
+            val today = java.time.Instant.ofEpochMilli(repository.now()).atZone(repository.zone()).toLocalDate()
+            dev.saikrishna.todo.widget.QuickData.build(tasks, lists, today)
+        }
+            .distinctUntilChanged()
+            .collect { runCatching { dev.saikrishna.todo.widget.QuickWidgets.refresh(this@TodoApp) } }
     }
 
     /**

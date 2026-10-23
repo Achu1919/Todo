@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v0.12 W1 picker preview (static, mirrors AddPillContent). -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="64dp" android:layout_gravity="center_vertical"
+        android:orientation="horizontal" android:gravity="center_vertical" android:background="@drawable/widget_glass_pill"
+        android:paddingStart="9dp" android:paddingEnd="9dp">
+        <FrameLayout android:layout_width="40dp" android:layout_height="40dp" android:background="@drawable/widget_accent_disc">
+            <ImageView android:layout_width="20dp" android:layout_height="20dp" android:layout_gravity="center" android:src="@drawable/ic_widget_plus" android:importantForAccessibility="no" />
+        </FrameLayout>
+        <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginStart="9dp"
+            android:text="Add a task" android:textSize="15sp" android:textStyle="bold" android:maxLines="1" android:textColor="@color/widget_ink" />
+        <FrameLayout android:layout_width="36dp" android:layout_height="36dp" android:background="@drawable/widget_soft_disc">
+            <ImageView android:layout_width="18dp" android:layout_height="18dp" android:layout_gravity="center" android:src="@drawable/ic_widget_mic" android:tint="@color/widget_ink_secondary" android:importantForAccessibility="no" />
+        </FrameLayout>
+    </LinearLayout>
+</FrameLayout>

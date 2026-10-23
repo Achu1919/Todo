@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v0.12: shown by Glance if composing an add-task widget fails. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="horizontal" android:gravity="center_vertical"
+    android:background="@drawable/widget_glass_pill"
+    android:paddingStart="16dp" android:paddingEnd="16dp">
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="@string/widget_error" android:textSize="13sp" android:maxLines="2" android:textColor="@color/widget_ink_secondary" />
+</LinearLayout>

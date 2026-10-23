@@ -84,6 +84,52 @@
                 android:resource="@xml/today_widget_info" />
         </receiver>
 
+        <!-- v0.12: add-task widgets (Glance): W1 pill, W2 round +, W3 quick lists, W4 hub. -->
+        <receiver
+            android:name=".widget.AddPillWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_pill_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/add_pill_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.AddRoundWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_round_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/add_round_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.QuickListsWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_quick_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/quick_lists_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.HubWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_hub_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/hub_widget_info" />
+        </receiver>
+
         <receiver
             android:name=".reminders.ReminderReceiver"
             android:exported="false" />

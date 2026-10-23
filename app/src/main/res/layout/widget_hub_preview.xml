@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v0.12 W4 picker preview (static, mirrors HubContent; sample task). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:background="@drawable/widget_glass_hub" android:padding="12dp">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical"
+        android:paddingStart="6dp" android:paddingTop="2dp">
+        <FrameLayout android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/widget_round_bg">
+            <ImageView android:layout_width="10dp" android:layout_height="10dp" android:layout_gravity="center" android:src="@drawable/ic_widget_check" android:importantForAccessibility="no" />
+        </FrameLayout>
+        <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginStart="6dp"
+            android:text="@string/app_name" android:textSize="13sp" android:textStyle="bold" android:textColor="@color/widget_ink_secondary" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Fri 23" android:textSize="12sp" android:textColor="@color/widget_ink_secondary" />
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="vertical" android:gravity="bottom"
+        android:paddingStart="6dp" android:paddingBottom="8dp">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Next · 11:30 am" android:textSize="12sp" android:textStyle="bold" android:textColor="@color/widget_ink_secondary" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Team sync notes" android:textSize="18sp" android:fontFamily="serif" android:maxLines="2" android:textColor="@color/widget_ink" />
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="48dp" android:orientation="horizontal" android:gravity="center_vertical"
+        android:background="@drawable/widget_soft_field" android:paddingStart="6dp" android:paddingEnd="6dp">
+        <FrameLayout android:layout_width="36dp" android:layout_height="36dp" android:background="@drawable/widget_accent_disc">
+            <ImageView android:layout_width="18dp" android:layout_height="18dp" android:layout_gravity="center" android:src="@drawable/ic_widget_plus" android:importantForAccessibility="no" />
+        </FrameLayout>
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="8dp"
+            android:text="Add a task" android:textSize="15sp" android:textStyle="bold" android:textColor="@color/widget_ink" />
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="48dp" android:layout_marginTop="8dp" android:orientation="horizontal">
+        <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="48dp" android:orientation="horizontal" android:gravity="center"
+            android:background="@drawable/widget_soft_chip">
+            <ImageView android:layout_width="15dp" android:layout_height="15dp" android:layout_marginEnd="5dp" android:src="@drawable/ic_widget_mic" android:tint="@color/widget_ink_secondary" android:importantForAccessibility="no" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Voice" android:textSize="13sp" android:textStyle="bold" android:textColor="@color/widget_ink" />
+        </LinearLayout>
+        <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="48dp" android:layout_marginStart="8dp" android:orientation="horizontal" android:gravity="center"
+            android:background="@drawable/widget_soft_chip">
+            <ImageView android:layout_width="15dp" android:layout_height="15dp" android:layout_marginEnd="5dp" android:src="@drawable/ic_widget_sun" android:tint="@color/widget_accent" android:importantForAccessibility="no" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Plan" android:textSize="13sp" android:textStyle="bold" android:textColor="@color/widget_ink" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>
