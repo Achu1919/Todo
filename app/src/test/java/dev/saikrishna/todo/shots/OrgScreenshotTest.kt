@@ -113,10 +113,10 @@ class OrgScreenshotTest {
 
     private fun rows(name: String, dark: Boolean) { start(dark); capture(name) }
 
-    /** v0.9 lists panel, grown out of the bottom-left lists button. */
+    /** The bottom-left button (v0.9 lists panel; v0.13 the view switcher's pills). */
     private fun picker(name: String, dark: Boolean) {
         start(dark)
-        rule.onNodeWithTag("lists-button").performSemanticsAction(SemanticsActions.OnClick)
+        rule.onNodeWithTag("view-switcher", useUnmergedTree = true).performSemanticsAction(SemanticsActions.OnClick)
         settle()
         capture(name)
     }

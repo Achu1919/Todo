@@ -141,7 +141,12 @@ class V12ScreenshotTest {
     }
 
     private fun role(r: Role) = SemanticsMatcher.expectValue(SemanticsProperties.Role, r)
-    private fun tab(name: String) = rule.onNode(hasText(name) and role(Role.Tab)).performSemanticsAction(SemanticsActions.OnClick)
+    /** v0.13: Home/Calendar are header tabs, the Todo views sit behind the switcher. */
+    private fun tab(name: String) {
+        val f = if (name == "Overview" || name == "Home") dev.saikrishna.todo.ui.home.Filter.Overview else dev.saikrishna.todo.ui.home.Filter.valueOf(name)
+        if (f == dev.saikrishna.todo.ui.home.Filter.Overview) dev.saikrishna.todo.ui.home.NavTest.section(rule, dev.saikrishna.todo.ui.home.Section.Home) {}
+        else dev.saikrishna.todo.ui.home.NavTest.go(rule, f) { settle() }
+    }
     private fun chip(name: String) = rule.onNode(hasText(name) and role(Role.RadioButton)).performSemanticsAction(SemanticsActions.OnClick)
     // Idle first, then frame-sized steps: one big advanceTimeBy() right after a semantics click
     // ran before the click was applied, so v0.12.0's "Done" shot showed Upcoming (see HomeTabsTest).
@@ -149,7 +154,11 @@ class V12ScreenshotTest {
         rule.waitForIdle()
         repeat((ms / 100).toInt()) { rule.mainClock.advanceTimeBy(100); rule.waitForIdle() }
     }
-    private fun onTab(name: String) = rule.onNode(hasText(name) and role(Role.Tab)).assertIsSelected()
+    private fun onTab(name: String) {
+        if (name == "Overview") rule.onNode(dev.saikrishna.todo.ui.home.NavTest.sectionTab(dev.saikrishna.todo.ui.home.Section.Home)).assertIsSelected()
+        else org.junit.Assert.assertEquals("View: $name", rule.onNode(androidx.compose.ui.test.hasTestTag("view-switcher"), useUnmergedTree = true)
+            .fetchSemanticsNode().config[SemanticsProperties.ContentDescription].joinToString())
+    }
 
     private fun record(n: Int, stepMs: Long, action: () -> Unit): List<Bitmap> {
         val out = ArrayList<Bitmap>()

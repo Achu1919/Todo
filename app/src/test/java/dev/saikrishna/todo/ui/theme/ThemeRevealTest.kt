@@ -275,8 +275,7 @@ class ThemeRevealTest {
 
     @Test fun worksOnUpcomingAndDone() {
         for ((page, want) in listOf("Upcoming" to ThemeMode.Dark, "Done" to ThemeMode.Light)) {
-            rule.onNodeWithText(page).performSemanticsAction(SemanticsActions.OnClick)
-            settleIdle()
+            dev.saikrishna.todo.ui.home.NavTest.go(rule, dev.saikrishna.todo.ui.home.Filter.valueOf(page)) { settleIdle() }
             click(); settleIdle()
             assertEquals(page, want, storedEventually(want))
             settleIdle()

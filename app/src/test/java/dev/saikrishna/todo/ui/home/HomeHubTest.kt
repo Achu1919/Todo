@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -34,11 +35,14 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.time.LocalDate
 
-/** v0.9 lists panel: its rows do what they say and close the panel; the header has no Settings button. */
+/**
+ * v0.13: the lists panel is gone. The bottom-left button is the view switcher (four pills,
+ * back/scrim fold them), and Home carries Settings, Plan your day, list management and saved views.
+ */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [36], qualifiers = "w411dp-h891dp-420dpi", application = Application::class)
-class ListsPanelTest {
+class HomeHubTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
     private val ctx: Application = ApplicationProvider.getApplicationContext()
     private val db = TodoDatabase.inMemory(ctx)
@@ -80,61 +84,53 @@ class ListsPanelTest {
     }
 
     private fun settle() { rule.mainClock.advanceTimeBy(1_200); rule.waitForIdle() }
-    private fun open() { rule.onNodeWithTag("lists-button").performSemanticsAction(SemanticsActions.OnClick); settle() }
-    private fun isOpen() = rule.onAllNodes(hasTestTag("lists-panel"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
-    private fun click(text: String) { rule.onNodeWithText(text).performSemanticsAction(SemanticsActions.OnClick); settle() }
-    private fun clickRow(text: String) {
-        val radio = androidx.compose.ui.test.SemanticsMatcher.expectValue(SemanticsProperties.Role, androidx.compose.ui.semantics.Role.RadioButton)
-        // In the panel (v0.12 list chips on the page are radio buttons too).
-        val inPanel = androidx.compose.ui.test.hasAnyAncestor(androidx.compose.ui.test.hasTestTag("lists-panel"))
-        rule.onNode(androidx.compose.ui.test.hasText(text) and radio and inPanel).performSemanticsAction(SemanticsActions.OnClick); settle()
-    }
-    private fun buttonLabel() = rule.onNodeWithTag("lists-button").fetchSemanticsNode().config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString()
+    private fun tagged(tag: String) = rule.onAllNodes(hasTestTag(tag), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+    private fun switcherOpen() = tagged("switcher-today")
+    private fun tapSwitcher() { rule.onNode(hasTestTag("view-switcher"), useUnmergedTree = true).performSemanticsAction(SemanticsActions.OnClick); settle() }
+    private fun switcherLabel() = rule.onNode(hasTestTag("view-switcher"), useUnmergedTree = true).fetchSemanticsNode()
+        .config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString()
+    private fun back() { rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }; settle() }
+    private fun clickTag(tag: String) { rule.onNodeWithTag(tag).performSemanticsAction(SemanticsActions.OnClick); settle() }
 
-    @Test fun headerHasNoSettingsOrListButton() {
+    @Test fun headerHasSectionsAndTheSwitcherShowsTheView() {
         start()
-        assertTrue(rule.onAllNodes(hasContentDescription("Settings")).fetchSemanticsNodes().isEmpty())
-        assertTrue(rule.onAllNodes(hasTestTag("list-pill"), useUnmergedTree = true).fetchSemanticsNodes().isEmpty())
+        for (s in Section.entries) assertTrue(s.title, rule.onAllNodes(NavTest.sectionTab(s)).fetchSemanticsNodes().isNotEmpty())
+        assertFalse("no view pills until opened", switcherOpen())
+        assertEquals("View: Today", switcherLabel())
         assertTrue(rule.onAllNodes(hasContentDescription("Search")).fetchSemanticsNodes().isNotEmpty())
-        assertEquals("Lists, current: All lists", buttonLabel())
+        assertFalse("Settings lives on Home", tagged("home-settings"))
     }
 
-    @Test fun planRowShowsTheLiveSummaryAndPushesPlanning() {
+    @Test fun switcherOpensPicksAndFolds() {
         start()
-        open()
-        assertTrue(isOpen())
-        assertTrue(rule.onAllNodes(androidx.compose.ui.test.hasText("2 overdue · 1 today")).fetchSemanticsNodes().isNotEmpty())
-        click("Plan your day")
-        assertFalse(isOpen())
-        assertEquals(listOf("plan"), opened)
+        tapSwitcher()
+        assertTrue(switcherOpen())
+        for (v in TodoViews) assertTrue(v.name, tagged("switcher-${v.name.lowercase()}"))
+        rule.onNodeWithTag("switcher-today").assertIsSelected()
+        back()
+        assertFalse("back folds the pills", switcherOpen())
+        tapSwitcher(); clickTag("switcher-upcoming")
+        assertFalse("a pick folds the pills", switcherOpen())
+        assertEquals("View: Upcoming", switcherLabel())
+        tapSwitcher()
+        rule.onNode(hasContentDescription("Close views")).performSemanticsAction(SemanticsActions.OnClick); settle()
+        assertFalse("the scrim folds the pills", switcherOpen())
+        assertEquals("View: Upcoming", switcherLabel())
     }
 
-    @Test fun selectingAListClosesAndSwitches() {
+    @Test fun homeCarriesSettingsPlanListsAndViews() {
         start()
-        open()
-        clickRow("Work")
-        assertFalse(isOpen())
-        assertEquals(TaskList.WORK, vm.selectedList.value)
-        assertEquals("Lists, current: Work", buttonLabel())
-        open()
-        clickRow("All lists")
-        assertEquals(null, vm.selectedList.value)
-    }
-
-    @Test fun newListSavedViewSettingsAndBack() {
-        start()
-        open(); click("New list"); assertFalse(isOpen())
-        open(); click("Errands"); assertFalse(isOpen())
-        // v0.11: a saved view opens the in-place search morph (Home stays); back closes it.
-        assertTrue(rule.onAllNodes(hasTestTag("search-overlay")).fetchSemanticsNodes().isNotEmpty())
-        rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }
-        settle()
-        assertTrue(rule.onAllNodes(hasTestTag("search-overlay")).fetchSemanticsNodes().isEmpty())
-        open(); click("Settings"); assertFalse(isOpen())
-        assertEquals(listOf("lists", "search", "settings"), opened)
-        open()
-        rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }
-        settle()
-        assertFalse("back closes the panel", isOpen())
+        NavTest.section(rule, Section.Home) { settle() }
+        assertTrue(rule.onAllNodes(androidx.compose.ui.test.hasText("Plan your day")).fetchSemanticsNodes().isNotEmpty())
+        rule.onNodeWithText("Plan your day").performSemanticsAction(SemanticsActions.OnClick); settle()
+        clickTag("home-settings")
+        clickTag("lists-manage")
+        clickTag("lists-new")
+        assertEquals(listOf("plan", "settings", "lists", "lists"), opened)
+        // A saved view opens the in-place search morph (Home stays); back closes it.
+        rule.onNode(androidx.compose.ui.test.hasText("Errands") and androidx.compose.ui.test.hasClickAction()).performSemanticsAction(SemanticsActions.OnClick); settle()
+        assertTrue(tagged("search-overlay"))
+        back()
+        assertFalse(tagged("search-overlay"))
     }
 }

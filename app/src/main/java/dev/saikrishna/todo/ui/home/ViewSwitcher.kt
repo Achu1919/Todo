@@ -40,6 +40,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Constraints
@@ -233,7 +234,8 @@ fun ViewSwitcherOverlay(
                         if (!folded && state.open) { haptics.tick(); state.close() }
                     }
                 }
-                .semantics { contentDescription = "Close views" },
+                // TalkBack: the scrim is a real "close" target, not just a gesture surface.
+                .semantics { contentDescription = "Close views"; onClick("Close views") { state.close(); true } },
         )
         // Pills: stacked upwards from just above the button, left-aligned with it.
         val gap = with(density) { 10.dp.roundToPx() }

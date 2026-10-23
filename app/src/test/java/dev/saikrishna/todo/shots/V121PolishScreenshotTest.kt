@@ -149,8 +149,8 @@ class V121PolishScreenshotTest(private val dark: Boolean, private val scale: Flo
 
     private fun role(r: Role) = SemanticsMatcher.expectValue(SemanticsProperties.Role, r)
     private fun tab(name: String) {
-        rule.onNode(hasText(name) and role(Role.Tab)).performSemanticsAction(SemanticsActions.OnClick); settle()
-        rule.onNode(hasText(name) and role(Role.Tab)).assertIsSelected()
+        val f = if (name == "Overview" || name == "Home") dev.saikrishna.todo.ui.home.Filter.Overview else dev.saikrishna.todo.ui.home.Filter.valueOf(name)
+        dev.saikrishna.todo.ui.home.NavTest.go(rule, f) { settle() }
     }
 
     @Test fun today() { home(); save("today") }
@@ -177,7 +177,7 @@ class V121PolishScreenshotTest(private val dark: Boolean, private val scale: Flo
     }
     @Test fun lists() {
         home()
-        rule.onNodeWithTag("lists-button").performSemanticsAction(SemanticsActions.OnClick); settle()
+        rule.onNodeWithTag("view-switcher", useUnmergedTree = true).performSemanticsAction(SemanticsActions.OnClick); settle()
         save("lists")
     }
     @Test fun themeReveal() {

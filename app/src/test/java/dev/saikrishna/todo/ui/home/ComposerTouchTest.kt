@@ -71,12 +71,13 @@ class ComposerTouchTest {
 
     private fun settle() { rule.mainClock.advanceTimeBy(1_200); rule.waitForIdle() }
     private fun hostOpen() = rule.onAllNodes(hasContentDescription("Close")).fetchSemanticsNodes().isNotEmpty()
-    private fun listsPanelOpen() = rule.onAllNodes(hasTestTag("lists-panel"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+    private fun listsPanelOpen() = rule.onAllNodes(hasTestTag("switcher-overlay"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
     /** A task panel (a row was opened); the v0.9 lists panel shares the host but is not a leak. */
     private fun panelOpen() = hostOpen() && !listsPanelOpen()
-    private fun lists(): Rect = rule.onNode(hasTestTag("lists-button"), useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+    private fun lists(): Rect = rule.onNode(hasTestTag("view-switcher"), useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
     private fun closePanel() { rule.onNode(hasContentDescription("Close")).performSemanticsAction(SemanticsActions.OnClick); settle() }
-    private fun closeAny() { if (hostOpen()) closePanel() }
+    private fun closeSwitcher() { rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }; settle() }
+    private fun closeAny() { if (listsPanelOpen()) closeSwitcher(); if (hostOpen()) closePanel() }
     private fun surface(): Rect = rule.onNode(hasTestTag("composer-surface"), useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
     private fun fieldText() = rule.onNode(hasSetTextAction()).fetchSemanticsNode().config[SemanticsProperties.EditableText].text
     private fun tap(p: Offset) { rule.onRoot().performTouchInput { click(p) }; settle() }
@@ -121,7 +122,7 @@ class ComposerTouchTest {
         chrome.expand(); settle()
         rule.onNode(hasSetTextAction()).performClick(); settle()
         assertTrue(chrome.focused)
-        rule.onNode(androidx.compose.ui.test.hasText("Upcoming") and androidx.compose.ui.test.hasClickAction()).performSemanticsAction(SemanticsActions.OnClick); settle()
+        NavTest.section(rule, Section.Calendar) { settle() }
         assertFalse("page switch cleared focus", chrome.focused)
     }
 
@@ -169,8 +170,8 @@ class ComposerTouchTest {
             val listsUp = listsPanelOpen()
             log.append("[k=${"%.2f".format(chrome.progress.value)} c=${chrome.collapsed}] $state ${if (long) "long" else "tap"} $name (${"%.0f".format(p.x / d)},${"%.0f".format(p.y / d)} dp): ${if (leaked) "LEAK" else if (listsUp) "lists panel" else "blocked"}\n")
             if (leaked) fails += "$state ${if (long) "long-press" else "tap"} at $name reached a row"
-            if (!long && onButton && !listsUp) fails += "$state tap at $name did not open the lists panel"
-            if (!onButton && listsUp) fails += "$state ${if (long) "long-press" else "tap"} at $name opened the lists panel"
+            if (!long && onButton && !listsUp) fails += "$state tap at $name did not open the view switcher"
+            if (!onButton && listsUp) fails += "$state ${if (long) "long-press" else "tap"} at $name opened the view switcher"
             closeAny()
             if (chrome.focused) chrome.dismiss()
             settle()
@@ -248,10 +249,10 @@ class ComposerTouchTest {
         tap(lists().center)
         assertFalse("editing ended", chrome.focused)
         assertEquals("IME hide requested once", before + 1, chrome.dismissCount)
-        assertTrue("lists panel open", listsPanelOpen())
+        assertTrue("view switcher open", listsPanelOpen())
         assertEquals("draft kept", "Half a thought", fieldText())
         assertEquals(0, HomeTestHooks.rowInput)
-        closePanel()
+        closeSwitcher()
         assertFalse(listsPanelOpen())
         assertFalse("the button did not take focus", chrome.focused)
     }

@@ -126,7 +126,7 @@ class SearchMorphTest {
         assertEquals(SearchFilter(), vm.searchFilter.value)
         // Home was never re-created: same chrome object, controls back.
         assertTrue(chrome === HomeTestHooks.chrome)
-        rule.onNodeWithTag("lists-button").fetchSemanticsNode()
+        rule.onNodeWithTag("view-switcher", useUnmergedTree = true).fetchSemanticsNode()
     }
 
     @Test fun typingFiltersAndTapOpensTheTask() {
@@ -158,15 +158,15 @@ class SearchMorphTest {
         assertTrue(rule.onAllNodes(hasText("Call the bank about the card") and androidx.compose.ui.test.hasAnyAncestor(hasTestTag("search-results"))).fetchSemanticsNodes().isNotEmpty())
     }
 
-    @Test fun savedViewFromListsPanelBringsItsQuery() {
+    @Test fun savedViewFromHomeBringsItsQuery() {
         start()
-        rule.onNodeWithTag("lists-button").performSemanticsAction(SemanticsActions.OnClick); settle()
-        rule.onNode(hasText("Errands")).performSemanticsAction(SemanticsActions.OnClick); settle()
+        dev.saikrishna.todo.ui.home.NavTest.section(rule, dev.saikrishna.todo.ui.home.Section.Home) { settle() }
+        rule.onNode(hasText("Errands") and androidx.compose.ui.test.hasClickAction()).performSemanticsAction(SemanticsActions.OnClick); settle()
         assertTrue(overlay())
         assertEquals("milk", field().fetchSemanticsNode().config.getOrNull(SemanticsProperties.EditableText)?.text)
         assertTrue(rule.onAllNodes(hasText("Buy milk") and androidx.compose.ui.test.hasAnyAncestor(hasTestTag("search-results"))).fetchSemanticsNodes().isNotEmpty())
-        // The lists panel closed on the way.
-        assertTrue(rule.onAllNodes(hasTestTag("lists-panel"), useUnmergedTree = true).fetchSemanticsNodes().isEmpty())
+        // The view switcher is not left open behind it.
+        assertTrue(rule.onAllNodes(hasTestTag("switcher-today"), useUnmergedTree = true).fetchSemanticsNodes().isEmpty())
     }
 
     @Test fun shieldSwallowsTapsAndCloses() {

@@ -79,7 +79,7 @@ class ComposerCollapseTest {
         rule.onAllNodes(hasTestTag("composer-surface"), useUnmergedTree = true).fetchSemanticsNodes().map { it.boundsInRoot }
 
     private fun listsButtons(): List<Rect> =
-        rule.onAllNodes(hasTestTag("lists-button"), useUnmergedTree = true).fetchSemanticsNodes().map { it.boundsInRoot }
+        rule.onAllNodes(hasTestTag("view-switcher"), useUnmergedTree = true).fetchSemanticsNodes().map { it.boundsInRoot }
 
     private class F(val bounds: List<Rect>, val k: Float, val bmp: Bitmap, val lists: List<Rect> = emptyList())
 
@@ -189,8 +189,7 @@ class ComposerCollapseTest {
         start()
         chrome.collapseForTest(); rule.mainClock.advanceTimeBy(1_000); rule.waitForIdle()
         assertTrue(chrome.collapsed)
-        rule.onNode(androidx.compose.ui.test.hasText("Upcoming") and androidx.compose.ui.test.hasClickAction()).performSemanticsAction(SemanticsActions.OnClick)
-        rule.mainClock.advanceTimeBy(1_000); rule.waitForIdle()
+        NavTest.go(rule, Filter.Upcoming) { rule.mainClock.advanceTimeBy(1_000); rule.waitForIdle() }
         assertFalse(chrome.collapsed)
         assertEquals(0f, chrome.progress.value)
     }

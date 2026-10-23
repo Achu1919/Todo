@@ -103,8 +103,7 @@ class HomeScreenshotTest {
         rule.mainClock.advanceTimeBy(2_000)
         rule.waitForIdle()
         repeat(page) {
-            rule.onNodeWithText(if (it == 0) "Upcoming" else "Done").performClick()
-            rule.mainClock.advanceTimeBy(1_500)
+            dev.saikrishna.todo.ui.home.NavTest.go(rule, if (it == 0) dev.saikrishna.todo.ui.home.Filter.Upcoming else dev.saikrishna.todo.ui.home.Filter.Done) { rule.mainClock.advanceTimeBy(1_500) }
         }
         if (type != null) {
             rule.onNode(hasSetTextAction()).performTextInput(type)
