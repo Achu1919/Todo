@@ -203,7 +203,7 @@ internal fun DayToggles(selected: Set<DayOfWeek>, onChange: (Set<DayOfWeek>) -> 
 }
 
 @Composable
-private fun Stepper(
+internal fun Stepper(
     prefix: String,
     value: Int,
     suffix: String?,

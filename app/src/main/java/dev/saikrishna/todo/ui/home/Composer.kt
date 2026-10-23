@@ -7,6 +7,8 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.runtime.MutableState
+import dev.saikrishna.todo.domain.ComposerDraft
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
@@ -160,6 +162,13 @@ fun Composer(
     leading: (@Composable () -> Unit)? = null,
     /** v0.11: false while the search morph owns the keyboard (Home must not relayout per IME frame). */
     followIme: Boolean = true,
+    /**
+     * v0.13 add-task toolbar. Non-null turns it on: tool buttons above the keyboard, chips for the
+     * merged values, glass pickers, and submit hands over the merged [ComposerDraft.Draft].
+     */
+    onSubmitDraft: ((ComposerDraft.Draft) -> Unit)? = null,
+    /** Toolbar picks, hoisted when the caller pre-fills them (Calendar's "add on this day"). */
+    picksState: MutableState<ComposerDraft.Picks>? = null,
 ) {
     val c = AppTheme.colors
     val type = AppTheme.type
@@ -175,6 +184,12 @@ fun Composer(
     val currentClock by rememberUpdatedState(clock)
     val currentLists by rememberUpdatedState(lists)
     val parsed by remember { derivedStateOf { QuickParse.parse(state.text.toString(), currentClock(), ignored, currentLists) } }
+    // v0.13 toolbar: explicit picks merged with the parse (picks win), recomputed live.
+    val toolbarOn = onSubmitDraft != null
+    val ownPicks = remember { mutableStateOf(ComposerDraft.Picks()) }
+    val picksHolder = picksState ?: ownPicks
+    var activeTool by remember { mutableStateOf<ComposerDraft.Tool?>(null) }
+    val draft by remember(picksHolder) { derivedStateOf { ComposerDraft.merge(parsed, picksHolder.value, currentClock(), currentLists) } }
     val layout = remember { LayoutHolder() }
 
     // Voice.
@@ -219,7 +234,13 @@ fun Composer(
         if (voice.listening) voice.stop()
         submitting = true
         haptics.tick() // one haptic per intent, when the add commits
-        onSubmit(QuickParse.parse(text, clock(), ignored, lists))
+        val finalParse = QuickParse.parse(text, clock(), ignored, lists)
+        val toDraft = onSubmitDraft
+        if (toDraft != null) {
+            toDraft(ComposerDraft.merge(finalParse, picksHolder.value, clock(), lists))
+            picksHolder.value = ComposerDraft.Picks()
+            activeTool = null
+        } else onSubmit(finalParse)
         scope.launch {
             try {
                 textAlpha.animateTo(0f, tween(Durations.FadeOutFast, easing = Easings.Standard))
@@ -234,7 +255,11 @@ fun Composer(
 
     // v0.7.3 collapse: report what blocks it, run the one-surface morph.
     var focused by remember { mutableStateOf(false) }
-    val busy = focused || hasText || voice.listening || parsed.tokens.isNotEmpty()
+    val busy = focused || hasText || voice.listening || parsed.tokens.isNotEmpty() ||
+        (toolbarOn && (!picksHolder.value.isEmpty || activeTool != null))
+    // Calendar "add on this day" (and any caller): expand and focus on request.
+    val focusTick = chrome?.focusTick ?: 0
+    LaunchedEffect(focusTick) { if (focusTick > 0) { chrome?.expand(); focus.requestFocus() } }
     if (chrome != null) {
         androidx.compose.runtime.SideEffect { chrome.composerBusy = busy }
         LaunchedEffect(chrome, reduced) {
@@ -266,6 +291,7 @@ fun Composer(
         androidx.compose.runtime.SideEffect {
             chrome.focused = focused
             chrome.dismiss = {
+                activeTool = null
                 if (focused) {
                     chrome.dismissCount++
                     keyboard?.hide()
@@ -349,11 +375,39 @@ fun Composer(
                 .padding(top = 6.dp, bottom = 10.dp),
         ) {
             Box(Modifier.layout { m, cons -> val pl = m.measure(cons); chipsH.v = pl.height; layout(pl.width, pl.height) { pl.place(0, 0) } }) {
-                ParseChips(
-                    tokens = parsed.tokens,
-                    onRemove = { t -> haptics.tick(); ignored = ignored + t.key },
-                    lists = lists,
-                )
+                if (toolbarOn) {
+                    Column {
+                        ToolPopover(
+                            tool = activeTool,
+                            draft = draft,
+                            picks = picksHolder.value,
+                            today = clock().toLocalDate(),
+                            lists = lists,
+                            onPicks = { picksHolder.value = it },
+                            onClose = { activeTool = null },
+                            modifier = Modifier.pointerInput(Unit) { detectTapGestures { } },
+                        )
+                        DraftChips(
+                            draft = draft,
+                            tagTokens = parsed.tokens.filter { it.kind == QuickParse.Kind.Tag },
+                            lists = lists,
+                            onOpen = { t -> haptics.tick(); activeTool = t },
+                            onClear = { chip ->
+                                haptics.tick()
+                                val (p, ig) = ComposerDraft.clear(chip, picksHolder.value, ignored)
+                                picksHolder.value = p
+                                ignored = ig
+                            },
+                            onRemoveTag = { t -> haptics.tick(); ignored = ignored + t.key },
+                        )
+                    }
+                } else {
+                    ParseChips(
+                        tokens = parsed.tokens,
+                        onRemove = { t -> haptics.tick(); ignored = ignored + t.key },
+                        lists = lists,
+                    )
+                }
             }
             val pillW = with(androidx.compose.ui.platform.LocalDensity.current) { PillWidth.roundToPx() }
             Box(Modifier.fillMaxWidth()) {
@@ -555,6 +609,14 @@ fun Composer(
                         .graphicsLayer { alpha = chrome?.fade?.value ?: 1f },
                 ) { leading() }
             }
+            }
+            if (toolbarOn) {
+                ComposerToolRow(
+                    visible = (focused || activeTool != null) && !collapsedTarget,
+                    draft = draft,
+                    active = activeTool,
+                    onTool = { t -> haptics.tick(); activeTool = if (activeTool == t) null else t },
+                )
             }
         }
         },

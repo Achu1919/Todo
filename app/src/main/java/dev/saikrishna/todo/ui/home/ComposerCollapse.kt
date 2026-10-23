@@ -81,6 +81,11 @@ class ComposerChrome(collapseAfterPx: Float, expandAfterPx: Float) {
     /** The whole composer (chips + bar) in root coordinates: taps inside it are not "outside". */
     var composerBounds: androidx.compose.ui.geometry.Rect = androidx.compose.ui.geometry.Rect.Zero
 
+    /** v0.13: bump to expand + focus the field (Calendar's "add on this day"). */
+    var focusTick by mutableStateOf(0)
+        private set
+    fun focusRequest() { focusTick++ }
+
     /** The current page's list. */
     var list: LazyListState? = null
 
