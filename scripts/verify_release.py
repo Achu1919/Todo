@@ -129,7 +129,7 @@ for w, info in Widgets.items():
     b = re.split(r"\n\s*E: (?:receiver|service|activity|provider)\b", b)[0]
     if "android.appwidget.action.APPWIDGET_UPDATE" not in b or "android.appwidget.provider" not in b:
         fails.append(f"NOT A WIDGET  {w}Receiver (APPWIDGET_UPDATE / provider meta-data)")
-    if 'exported(0x01010010)=(type 0x12)0xffffffff' not in b:
+    if not re.search(r"exported\(0x01010010\)=(?:true|\(type 0x12\)0xffffffff)", b):
         fails.append(f"NOT EXPORTED  {w}Receiver")
     res = subprocess.run([os.path.join(bt, "aapt2"), "dump", "resources", apk], capture_output=True, text=True).stdout
     m = re.search(rf"resource 0x[0-9a-f]+ xml/{info}\n\s+\(\) \(file\) (\S+)", res)
