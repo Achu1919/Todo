@@ -27,3 +27,10 @@
 # GlanceAppWidgetManager (receiver -> provider), so keep it stable across app updates.
 -keep class dev.saikrishna.todo.widget.TodayWidgetReceiver { public <init>(); }
 -keep class dev.saikrishna.todo.widget.TodayWidget { public <init>(); }
+# v0.12 add-task widgets: same contract as the Today widget (receivers created by the system,
+# widget class names stored by GlanceAppWidgetManager).
+-keep class dev.saikrishna.todo.widget.*WidgetReceiver { public <init>(); }
+-keep class dev.saikrishna.todo.widget.AddPillWidget { public <init>(); }
+-keep class dev.saikrishna.todo.widget.AddRoundWidget { public <init>(); }
+-keep class dev.saikrishna.todo.widget.QuickListsWidget { public <init>(); }
+-keep class dev.saikrishna.todo.widget.HubWidget { public <init>(); }

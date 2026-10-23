@@ -105,12 +105,41 @@ for n, (sup, ifs, ctors) in classes.items():
     if o.endswith("_Impl") and "androidx.room.RoomDatabase" in anc:
         need(n, "()V", "Room database")
 
-# 3. explicit must-haves for the Today widget
+# 3. explicit must-haves for the Today widget (v0.8.1)
 need("androidx.work.OverwritingInputMerger", "()V", "WorkManager default InputMerger")
 need("dev.saikrishna.todo.widget.CompleteTaskAction", "()V", "actionRunCallback<CompleteTaskAction>")
 need("dev.saikrishna.todo.widget.TodayWidgetReceiver", "()V", "widget receiver")
 need("dev.saikrishna.todo.widget.TodayWidget", "()V", "widget (name stored by GlanceAppWidgetManager)")
 need("androidx.glance.session.SessionWorker", "(Landroid/content/Context;Landroidx/work/WorkerParameters;)V", "Glance session")
+
+# 4. v0.12 add-task widgets: receivers + widget classes, and each receiver is a real app widget
+#    provider (APPWIDGET_UPDATE filter, provider xml with a preview layout + image) in the APK.
+Widgets = {"TodayWidget": "today_widget_info", "AddPillWidget": "add_pill_widget_info", "AddRoundWidget": "add_round_widget_info",
+           "QuickListsWidget": "quick_lists_widget_info", "HubWidget": "hub_widget_info"}
+for w in Widgets:
+    need(f"dev.saikrishna.todo.widget.{w}Receiver", "()V", "widget receiver")
+    need(f"dev.saikrishna.todo.widget.{w}", "()V", "widget (name stored by GlanceAppWidgetManager)")
+need("dev.saikrishna.todo.ui.capture.CaptureActivity", "()V", "widget capture target")
+blocks = re.split(r"\n\s*E: receiver", tree)
+for w, info in Widgets.items():
+    checked += 1
+    b = next((b for b in blocks if f'"{pkg}.widget.{w}Receiver"' in b or f'".widget.{w}Receiver"' in b), None)
+    if b is None:
+        fails.append(f"NO RECEIVER  {w}Receiver in manifest"); continue
+    b = re.split(r"\n\s*E: (?:receiver|service|activity|provider)\b", b)[0]
+    if "android.appwidget.action.APPWIDGET_UPDATE" not in b or "android.appwidget.provider" not in b:
+        fails.append(f"NOT A WIDGET  {w}Receiver (APPWIDGET_UPDATE / provider meta-data)")
+    if 'exported(0x01010010)=(type 0x12)0xffffffff' not in b:
+        fails.append(f"NOT EXPORTED  {w}Receiver")
+    res = subprocess.run([os.path.join(bt, "aapt2"), "dump", "resources", apk], capture_output=True, text=True).stdout
+    m = re.search(rf"resource 0x[0-9a-f]+ xml/{info}\n\s+\(\) \(file\) (\S+)", res)
+    if not m:
+        fails.append(f"NO PROVIDER XML  xml/{info}"); continue
+    px = subprocess.run([os.path.join(bt, "aapt2"), "dump", "xmltree", apk, "--file", m.group(1)], capture_output=True, text=True).stdout
+    if w != "TodayWidget" and ("previewLayout" not in px or "previewImage" not in px):
+        fails.append(f"NO PREVIEW  xml/{info} (previewLayout + previewImage)")
+    if "initialLayout" not in px:
+        fails.append(f"NO INITIAL LAYOUT  xml/{info}")
 
 print(f"{os.path.basename(apk)}: {len(classes)} classes, {checked} by-name checks")
 for f in fails:
