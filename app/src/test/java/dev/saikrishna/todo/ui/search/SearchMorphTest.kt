@@ -81,7 +81,7 @@ class SearchMorphTest {
                 }
             }
         }
-        rule.waitUntil(10_000) { vm.tasks.value != null && vm.lists.value.isNotEmpty() }
+        rule.waitUntil(30_000) { vm.tasks.value != null && vm.lists.value.isNotEmpty() } // Room loads on real executors; slow under the full suite
         settle()
     }
 
