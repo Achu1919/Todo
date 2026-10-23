@@ -41,8 +41,11 @@ class AddTaskTileService : TileService() {
 
     companion object {
         const val ACTION_CAPTURE = "dev.saikrishna.todo.CAPTURE"
-        fun captureIntent(context: android.content.Context): Intent =
-            Intent(context, CaptureActivity::class.java).setAction(ACTION_CAPTURE)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        /** The capture card; v0.12 widgets pass a [preset] (list, due today, voice). */
+        fun captureIntent(context: android.content.Context, preset: CapturePreset = CapturePreset()): Intent =
+            preset.applyTo(
+                Intent(context, CaptureActivity::class.java).setAction(ACTION_CAPTURE)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK),
+            )
     }
 }

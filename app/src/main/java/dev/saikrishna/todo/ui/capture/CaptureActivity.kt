@@ -47,6 +47,13 @@ class CaptureActivity : ComponentActivity() {
             window.attributes = window.attributes.also { it.blurBehindRadius = (20 * resources.displayMetrics.density).toInt() }
         }
         val draft = draftOf(intent)
+        val preset = CapturePreset.of(intent)
+        // v0.12 "Voice" preset: listening starts at once, so the keyboard stays down.
+        if (preset.voice) {
+            window.setSoftInputMode(
+                WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE,
+            )
+        }
         val app = application as TodoApp
 
         setContent {
@@ -66,12 +73,13 @@ class CaptureActivity : ComponentActivity() {
                                 dev.saikrishna.todo.domain.Focus.effective(it.manual, it.manualAt, it.schedule, System.currentTimeMillis(), app.repository.zone())
                             }),
                             windowBlur = blur,
+                            preset = preset,
                             onSave = { parsed, notes, listId ->
                                 scope.launch {
                                     app.repository.add(
                                         NewTask(
                                             title = parsed.title,
-                                            dueDay = parsed.dueDay?.toEpochDay(),
+                                            dueDay = parsed.dueDay?.toEpochDay(), // a "due today" preset is already applied
                                             dueMinute = parsed.dueMinute,
                                             priority = parsed.priority ?: Priority.None,
                                             repeat = parsed.repeat,

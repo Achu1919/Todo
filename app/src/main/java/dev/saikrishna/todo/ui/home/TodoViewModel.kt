@@ -142,8 +142,9 @@ class TodoViewModel(
     }
 
     /** Adds a task from the composer's natural-language parse. */
-    fun add(parsed: QuickParse.Result) {
+    fun add(parsed: QuickParse.Result, listHint: Long? = null) {
         if (parsed.title.isBlank()) return
+        val hinted = listHint?.takeIf { id -> lists.value.any { it.id == id } }
         viewModelScope.launch {
             repository.add(
                 NewTask(
@@ -152,7 +153,7 @@ class TodoViewModel(
                     dueMinute = parsed.dueMinute,
                     priority = parsed.priority ?: Priority.None,
                     repeat = parsed.repeat,
-                    listId = parsed.list?.id ?: defaultList(),
+                    listId = parsed.list?.id ?: hinted ?: defaultList(),
                     tags = parsed.tags,
                 ),
             )
@@ -325,6 +326,8 @@ class TodoViewModel(
     fun setReduceMotion(on: Boolean) = viewModelScope.launch { settingsRepository.setReduceMotion(on) }
     fun setHaptics(on: Boolean) = viewModelScope.launch { settingsRepository.setHaptics(on) }
     fun setTheme(mode: ThemeMode) = viewModelScope.launch { settingsRepository.setTheme(mode) }
+    fun setOpenOn(page: dev.saikrishna.todo.data.StartPage) = viewModelScope.launch { settingsRepository.setOpenOn(page) }
+    fun setGreetingName(name: String) = viewModelScope.launch { settingsRepository.setGreetingName(name) }
 
     companion object {
         fun factory(repository: TaskRepository, settings: SettingsRepository) = viewModelFactory {

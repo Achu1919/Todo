@@ -87,6 +87,8 @@ fun TaskListPage(
     modifier: Modifier = Modifier,
     /** v0.7: list selector / focus indicator under the heading, and tapping the heading. */
     headingExtra: @Composable () -> Unit = {},
+    /** v0.12: end of the heading's title row (the theme toggle). */
+    headingTrailing: @Composable () -> Unit = {},
 ) {
     val haptics = LocalHaptics.current
     var local by remember { mutableStateOf<List<ListItem>?>(null) }
@@ -118,7 +120,7 @@ fun TaskListPage(
         item(key = "heading", contentType = "heading") {
             // v0.10 cold-start entrance: the heading is row 0, page items follow (draw phase only).
             Box(Modifier.launchEntrance(launch, LaunchEntrance.Slot.Row(0))) {
-                PageHeading(heading, caption, extra = headingExtra)
+                PageHeading(heading, caption, trailing = headingTrailing, extra = headingExtra)
             }
         }
         itemsIndexed(shown, key = { _, it -> it.key }, contentType = { _, it -> it.contentType }) { index, item ->

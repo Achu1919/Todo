@@ -14,8 +14,8 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-/** The three pages behind the filter pill (spec 6.2). Order = slide direction. */
-enum class Filter(val title: String) { Today("Today"), Upcoming("Upcoming"), Done("Done") }
+/** The pages behind the filter pill (spec 6.2; v0.12 adds Overview first). Order = slide direction. */
+enum class Filter(val title: String) { Overview("Overview"), Today("Today"), Upcoming("Upcoming"), Done("Done") }
 
 /** A row that changed state stays on its old page for a dwell, then collapses out (6.5, 6.9). */
 enum class LeavePhase { Dwell, Collapsing }
@@ -37,6 +37,8 @@ data class RowMeta(
     val progress: String? = null,
     val listName: String? = null,
     val listColor: Int = 0,
+    /** v0.12: list colour index for the row's accent bar and checkbox ring (null = one list only). */
+    val accent: Int? = null,
 ) {
     val isEmpty: Boolean get() = dueLabel == null && priority == Priority.None && !hasNotes && !repeats &&
         tags.isEmpty() && progress == null && listName == null
@@ -104,6 +106,7 @@ data class Pages(
     val doneCount: Int,
 ) {
     operator fun get(filter: Filter): List<ListItem> = when (filter) {
+        Filter.Overview -> emptyList()
         Filter.Today -> today
         Filter.Upcoming -> upcoming
         Filter.Done -> done
@@ -147,6 +150,7 @@ fun rowMeta(task: Task, today: LocalDate, showDue: Boolean, locale: Locale = Loc
         progress = if (subs.isEmpty()) null else "${subs.count { it.done }}/${subs.size}",
         listName = list?.let { l -> listOfNotNull(l.emoji, l.name).joinToString(" ") },
         listColor = list?.color ?: 0,
+        accent = if ((org?.lists?.size ?: 0) > 1) org!!.lists[task.listId]?.color else null,
     )
 }
 
@@ -174,6 +178,7 @@ fun buildPages(
     val upcomingTasks = ArrayList<Task>()
     val doneTasks = ArrayList<Task>()
     for (t in tasks) when (page(t)) {
+        Filter.Overview -> Unit // never a task's page
         Filter.Today -> todayTasks += t
         Filter.Upcoming -> upcomingTasks += t
         Filter.Done -> doneTasks += t
@@ -223,6 +228,42 @@ fun buildPages(
         doneCount = tasks.count { it.done && leaving[it.id]?.phase != LeavePhase.Dwell },
     )
 }
+
+/**
+ * v0.12 list chips: one page narrowed to one list. Rows of other lists go (so the existing item
+ * animations fade them out), day headers left without rows go, "Clear done" counts what is left,
+ * and an empty result gets a page-specific empty message. [listId] null = the page unchanged.
+ */
+fun filterByList(items: List<ListItem>, page: Filter, listId: Long?, listName: String = ""): List<ListItem> {
+    if (listId == null) return items
+    val rows = items.filter { it is ListItem.Row && it.task.listId == listId }
+    if (rows.isEmpty()) {
+        val name = listName.ifBlank { "this list" }
+        return listOf(
+            when (page) {
+                Filter.Upcoming -> ListItem.Empty("Nothing upcoming in $name.", "Tasks with a future date in this list wait here.")
+                Filter.Done -> ListItem.Empty("Nothing done in $name.", "Completed tasks from this list collect here.")
+                else -> ListItem.Empty("Nothing in $name today.", "All clear here. Tap All to see every list.")
+            },
+        )
+    }
+    val out = ArrayList<ListItem>(items.size)
+    var header: ListItem.DayHeader? = null
+    for (item in items) when (item) {
+        is ListItem.DayHeader -> header = item
+        is ListItem.Row -> if (item.task.listId == listId) {
+            header?.let { out += it; header = null }
+            out += item
+        }
+        is ListItem.ClearDone -> out += ListItem.ClearDone(rows.count { (it as ListItem.Row).task.done })
+        is ListItem.AllClear, is ListItem.Empty -> Unit
+    }
+    return out
+}
+
+/** v0.12 list chips: rows per list on one page (open rows; Done counts its completed rows). */
+fun countsByList(items: List<ListItem>): Map<Long, Int> =
+    items.filterIsInstance<ListItem.Row>().groupingBy { it.task.listId }.eachCount()
 
 /** Optimistic completion state applied over the database rows until Room catches up. */
 @Immutable

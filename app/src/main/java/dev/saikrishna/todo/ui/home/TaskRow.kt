@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
@@ -93,6 +94,25 @@ fun TaskRow(
                 )
                 else Modifier,
             )
+            // v0.12 list accent: a short rounded bar on the left edge, dimmed with the meta line
+            // when done (the progress is the row's state; the colour is read fresh in draw).
+            .then(
+                if (meta.accent == null) Modifier
+                else Modifier.drawWithContent {
+                    drawContent()
+                    val w = AccentWidth.toPx()
+                    val inset = AccentInset.toPx()
+                    val v = AccentVertical.toPx().coerceAtMost(size.height / 3f)
+                    val col = c.listColor(meta.accent)
+                    val a = 0.35f + 0.65f * ((metaAlpha.value - 0.5f) / 0.5f).coerceIn(0f, 1f)
+                    drawRoundRect(
+                        col.copy(alpha = col.alpha * a),
+                        topLeft = androidx.compose.ui.geometry.Offset(inset, v),
+                        size = androidx.compose.ui.geometry.Size(w, size.height - 2 * v),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(w / 2f),
+                    )
+                },
+            )
             // 4 dp start + the checkbox's 12 dp inner padding = the 16 dp row inset.
             .padding(start = 4.dp, end = Spacing.rowH),
         verticalAlignment = Alignment.Top,
@@ -103,6 +123,7 @@ fun TaskRow(
             label = task.title,
             enabled = enabled,
             modifier = Modifier.padding(top = 1.dp), // centre of the 24 dp mark on the first text line
+            tint = meta.accent?.let { c.listColor(it) },
         )
         Column(Modifier.weight(1f).padding(start = 4.dp, top = Spacing.rowV, bottom = Spacing.rowV)) {
             StrikeText(
@@ -118,6 +139,11 @@ fun TaskRow(
         }
     }
 }
+
+/** v0.12 list accent bar: 4 dp wide, 6 dp from the card edge, 12 dp short of top and bottom. */
+private val AccentWidth = 4.dp
+private val AccentInset = 6.dp
+private val AccentVertical = 12.dp
 
 @Composable
 internal fun MetaLine(meta: RowMeta, modifier: Modifier = Modifier, onTag: ((String) -> Unit)? = null) {

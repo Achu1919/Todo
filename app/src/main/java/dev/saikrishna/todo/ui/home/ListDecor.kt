@@ -108,19 +108,29 @@ fun ClearDoneRow(count: Int, onClear: () -> Unit, modifier: Modifier = Modifier)
     }
 }
 
-/** Page heading: medium serif title + a quiet caption (the serif-headline-over-glass look). */
+/**
+ * Page heading: medium serif title + a quiet caption (the serif-headline-over-glass look).
+ * v0.12: [trailing] sits at the end of the title row (the theme toggle); [extra] goes underneath
+ * (the list chips), outside the heading semantics.
+ */
 @Composable
-fun PageHeading(title: String, caption: String?, modifier: Modifier = Modifier, extra: @Composable () -> Unit = {}) {
+fun PageHeading(
+    title: String,
+    caption: String?,
+    modifier: Modifier = Modifier,
+    trailing: @Composable () -> Unit = {},
+    extra: @Composable () -> Unit = {},
+) {
     val c = AppTheme.colors
-    Column(
-        modifier
-            .fillMaxWidth()
-            .semantics { heading() }
-            .padding(start = 4.dp, top = 4.dp, bottom = 14.dp),
-    ) {
-        Text(title, style = AppTheme.type.display, color = c.ink)
-        if (caption != null) {
-            Text(caption, style = AppTheme.type.body, color = c.inkSecondary, modifier = Modifier.padding(top = 2.dp))
+    Column(modifier.fillMaxWidth().padding(start = 4.dp, top = 4.dp, bottom = 14.dp)) {
+        androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f).semantics { heading() }) {
+                Text(title, style = AppTheme.type.display, color = c.ink)
+                if (caption != null) {
+                    Text(caption, style = AppTheme.type.body, color = c.inkSecondary, modifier = Modifier.padding(top = 2.dp))
+                }
+            }
+            trailing()
         }
         extra()
     }

@@ -73,11 +73,14 @@ object PlanReminder {
     }
 
     fun openIntent(context: Context): PendingIntent = PendingIntent.getActivity(
-        context, 2,
-        Intent(context, MainActivity::class.java).setAction(ACTION_PLAN).putExtra(EXTRA_OPEN_PLAN, true)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+        context, 2, planActivityIntent(context),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
+
+    /** v0.12: the app opened at morning planning (notification tap, hub widget "Plan"). */
+    fun planActivityIntent(context: Context): Intent =
+        Intent(context, MainActivity::class.java).setAction(ACTION_PLAN).putExtra(EXTRA_OPEN_PLAN, true)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
 
     fun notify(context: Context, text: String) {
         if (!Reminders.notificationsAllowed(context)) return

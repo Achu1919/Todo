@@ -41,6 +41,7 @@ fun dropOutcome(items: List<ListItem>, movedId: Long, page: Filter): DropOutcome
 
 /** Which items can be dragged / dropped on, per page. Done is not reorderable. */
 fun reorderable(page: Filter, item: ListItem): Boolean = when (page) {
+    Filter.Overview -> false
     Filter.Today -> item is ListItem.Row
     Filter.Upcoming -> item is ListItem.Row || item is ListItem.DayHeader
     Filter.Done -> false

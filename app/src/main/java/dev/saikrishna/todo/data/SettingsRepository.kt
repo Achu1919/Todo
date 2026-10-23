@@ -17,6 +17,15 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 
+/** v0.12: "Open app on". */
+enum class StartPage {
+    Overview, Today;
+
+    companion object {
+        fun parse(name: String?): StartPage = entries.firstOrNull { it.name == name } ?: Today
+    }
+}
+
 enum class ThemeMode {
     System, Light, Dark;
 
@@ -36,14 +45,24 @@ data class AppSettings(
     val reduceMotion: Boolean = false,
     val haptics: Boolean = true,
     val theme: ThemeMode = ThemeMode.System,
+    /** v0.12: the page the app opens on (default Today). */
+    val openOn: StartPage = StartPage.Today,
+    /** v0.12: optional first name for the Overview greeting ("" = none). */
+    val name: String = "",
 ) {
     companion object {
         /** Pure mapping from stored values (any may be missing) to settings with defaults. */
-        fun from(reduceMotion: Boolean?, haptics: Boolean?, theme: String?): AppSettings = AppSettings(
+        fun from(
+            reduceMotion: Boolean?, haptics: Boolean?, theme: String?,
+            openOn: String? = null, name: String? = null,
+        ): AppSettings = AppSettings(
             reduceMotion = reduceMotion ?: false,
             haptics = haptics ?: true,
             theme = ThemeMode.parse(theme),
+            openOn = StartPage.parse(openOn),
+            name = name.orEmpty().trim().take(NameMax),
         )
+        const val NameMax = 24
     }
 }
 
@@ -56,6 +75,8 @@ class SettingsRepository(context: Context) {
         val ReduceMotion = booleanPreferencesKey("reduce_motion")
         val Haptics = booleanPreferencesKey("haptics")
         val Theme = stringPreferencesKey("theme")
+        val OpenOn = stringPreferencesKey("open_on")
+        val GreetingName = stringPreferencesKey("greeting_name")
         val AskedNotifications = booleanPreferencesKey("asked_notifications")
         val FocusManual = stringPreferencesKey("focus_manual")
         val FocusManualAt = longPreferencesKey("focus_manual_at")
@@ -75,12 +96,14 @@ class SettingsRepository(context: Context) {
     }
 
     val settings: Flow<AppSettings> = store.data.map { p ->
-        AppSettings.from(p[Keys.ReduceMotion], p[Keys.Haptics], p[Keys.Theme])
+        AppSettings.from(p[Keys.ReduceMotion], p[Keys.Haptics], p[Keys.Theme], p[Keys.OpenOn], p[Keys.GreetingName])
     }
 
     suspend fun setReduceMotion(on: Boolean) { store.edit { it[Keys.ReduceMotion] = on } }
     suspend fun setHaptics(on: Boolean) { store.edit { it[Keys.Haptics] = on } }
     suspend fun setTheme(mode: ThemeMode) { store.edit { it[Keys.Theme] = mode.name } }
+    suspend fun setOpenOn(page: StartPage) { store.edit { it[Keys.OpenOn] = page.name } }
+    suspend fun setGreetingName(name: String) { store.edit { it[Keys.GreetingName] = name.trim().take(AppSettings.NameMax) } }
 
     /** v0.6: the notification permission is asked once, in context (first timed task). */
     val askedNotifications: Flow<Boolean> = store.data.map { it[Keys.AskedNotifications] ?: false }
@@ -143,7 +166,7 @@ class SettingsRepository(context: Context) {
     }
 
     private val BackupBooleans = listOf(Keys.ReduceMotion, Keys.Haptics, Keys.FocusAuto, Keys.PlanEnabled)
-    private val BackupStrings = listOf(Keys.Theme, Keys.FocusManual, Keys.FocusDays, Keys.FocusOutside)
+    private val BackupStrings = listOf(Keys.Theme, Keys.FocusManual, Keys.FocusDays, Keys.FocusOutside, Keys.OpenOn, Keys.GreetingName)
     private val BackupInts = listOf(Keys.FocusStart, Keys.FocusEnd, Keys.PlanMinute)
     private val BackupLongs = listOf(Keys.FocusManualAt)
 

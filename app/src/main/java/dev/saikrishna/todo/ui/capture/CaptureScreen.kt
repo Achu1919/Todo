@@ -97,6 +97,10 @@ fun CaptureScreen(
     onFinished: () -> Unit,
     clock: () -> LocalDateTime = LocalDateTime::now,
     autoFocus: Boolean = true,
+    /** v0.12 widget presets: list, due today, start listening. */
+    preset: CapturePreset = CapturePreset(),
+    /** Test seam: voice input (null = the real recogniser). */
+    voiceOverride: VoiceControl? = null,
 ) {
     val c = AppTheme.colors
     val haptics = LocalHaptics.current
@@ -106,9 +110,38 @@ fun CaptureScreen(
     val title = rememberTextFieldState(draft.title)
     val notes = rememberTextFieldState(draft.notes)
     var ignored by remember { mutableStateOf(emptySet<String>()) }
-    var chosenList by remember { mutableLongStateOf(defaultList) }
+    // A preset list wins over the focus default while it exists.
+    val startList = preset.listId?.takeIf { id -> lists.any { it.id == id } } ?: defaultList
+    var chosenList by remember { mutableLongStateOf(startList) }
     var listTouched by remember { mutableStateOf(false) }
-    if (!listTouched) chosenList = defaultList
+    if (!listTouched) chosenList = startList
+    var dueToday by remember { mutableStateOf(preset.dueToday) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val voice = voiceOverride ?: remember { RealVoice(dev.saikrishna.todo.ui.home.VoiceInput(context.applicationContext)) }
+    androidx.compose.runtime.DisposableEffect(voice) { onDispose { voice.cancel() } }
+    var voiceHint by remember { mutableStateOf<String?>(null) }
+    fun startVoice() {
+        voiceHint = null
+        keyboard?.hide()
+        val prefix = title.text.toString().trimEnd().let { if (it.isEmpty()) "" else "$it " }
+        voice.start(
+            onText = { heard -> title.edit { replace(0, length, prefix + heard); selection = androidx.compose.ui.text.TextRange(length) } },
+            onDone = { err -> voiceHint = err },
+        )
+    }
+    val micPermission = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { granted -> if (granted) startVoice() else voiceHint = "Microphone permission is off" }
+    fun toggleVoice() {
+        haptics.tick()
+        when {
+            voice.listening -> voice.stop()
+            !voice.available -> voiceHint = "Voice input isn't available on this phone"
+            androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED -> startVoice()
+            else -> micPermission.launch(android.Manifest.permission.RECORD_AUDIO)
+        }
+    }
     var savedLabel by remember { mutableStateOf<String?>(null) }
     var leaving by remember { mutableStateOf(false) }
     val appear = remember { Animatable(0f) }
@@ -116,7 +149,7 @@ fun CaptureScreen(
     val rise = with(LocalDensity.current) { 48.dp.toPx() }
 
     LaunchedEffect(Unit) {
-        if (autoFocus) focus.requestFocus()
+        if (preset.voice) toggleVoice() else if (autoFocus) focus.requestFocus()
         appear.animateTo(1f, if (reduced) Tweens.reduced() else Springs.Glide.float)
     }
 
@@ -130,11 +163,14 @@ fun CaptureScreen(
         }
     }
 
-    val parsed = QuickParse.parse(title.text.toString(), clock(), ignored, lists)
+    val raw = QuickParse.parse(title.text.toString(), clock(), ignored, lists)
+    // "Due today" preset: today unless the text names a day.
+    val parsed = applyDueToday(raw, dueToday, clock().toLocalDate())
     val listId = parsed.list?.id ?: chosenList
 
     fun save() {
         if (parsed.title.isBlank() || savedLabel != null) return
+        if (voice.listening) voice.stop()
         haptics.thump()
         onSave(parsed, notes.text.toString(), listId)
         val today = clock().toLocalDate()
@@ -187,6 +223,12 @@ fun CaptureScreen(
                 else Form(
                     title = title, notes = notes, parsed = parsed, lists = lists, listId = listId,
                     focus = focus,
+                    dueToday = dueToday,
+                    onDueToday = { haptics.tick(); dueToday = !dueToday },
+                    listening = voice.listening,
+                    voiceAvailable = voice.available,
+                    voiceHint = voiceHint,
+                    onVoice = { toggleVoice() },
                     onRemoveToken = { t -> haptics.tick(); ignored = ignored + t.key },
                     onList = { id -> haptics.tick(); listTouched = true; chosenList = id; ignored = ignored + parsed.tokens.filter { it.kind == QuickParse.Kind.List }.map { it.key } },
                     onCancel = { leave() },
@@ -205,6 +247,12 @@ private fun Form(
     lists: List<TaskList>,
     listId: Long,
     focus: FocusRequester,
+    dueToday: Boolean,
+    onDueToday: () -> Unit,
+    listening: Boolean,
+    voiceAvailable: Boolean,
+    voiceHint: String?,
+    onVoice: () -> Unit,
     onRemoveToken: (QuickParse.Token) -> Unit,
     onList: (Long) -> Unit,
     onCancel: () -> Unit,
@@ -213,7 +261,16 @@ private fun Form(
     val c = AppTheme.colors
     val type = AppTheme.type
     Column(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 12.dp)) {
-        Text("New task", style = type.meta, color = c.inkSecondary, modifier = Modifier.padding(horizontal = 20.dp))
+        val header = when {
+            listening -> "Listening…"
+            voiceHint != null -> voiceHint
+            dueToday && parsed.tokens.none { it.kind == QuickParse.Kind.Date } -> "New task · Today"
+            else -> "New task"
+        }
+        Text(
+            header, style = type.meta, color = if (listening) c.accent else c.inkSecondary,
+            modifier = Modifier.padding(horizontal = 20.dp).testTag("capture-header"),
+        )
         Spacer(Modifier.height(6.dp))
         BasicTextField(
             state = title,
@@ -255,6 +312,11 @@ private fun Form(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // v0.12: "Today" (on from the due-today preset; tap to drop it) before the lists.
+            if (parsed.tokens.none { it.kind == QuickParse.Kind.Date }) {
+                PillChip(label = "Today", selected = dueToday, onClick = onDueToday, modifier = Modifier.testTag("capture-today"))
+                Spacer(Modifier.width(4.dp))
+            }
             for (l in lists) {
                 PillChip(
                     label = listOfNotNull(l.emoji, l.name).joinToString(" "),
@@ -270,6 +332,20 @@ private fun Form(
                 modifier = Modifier.clip(Shapes.full).clickable(role = Role.Button, onClick = onCancel).padding(horizontal = 12.dp, vertical = 12.dp),
             )
             Spacer(Modifier.weight(1f))
+            if (voiceAvailable) {
+                val micFill by dev.saikrishna.todo.ui.components.animateStateColor(listening, c.accent.copy(alpha = 0.16f), c.inkFill, Tweens.select(), label = "mic fill")
+                val micTint by dev.saikrishna.todo.ui.components.animateStateColor(listening, c.accent, c.ink, Tweens.select(), label = "mic tint")
+                Box(
+                    Modifier
+                        .size(44.dp)
+                        .clip(Shapes.full)
+                        .drawBehind { drawRect(micFill) }
+                        .clickable(role = Role.Button, onClickLabel = if (listening) "Stop listening" else "Speak the task", onClick = onVoice)
+                        .testTag("capture-voice"),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(AppIcons.Mic, null, tint = micTint, modifier = Modifier.size(20.dp)) }
+                Spacer(Modifier.width(8.dp))
+            }
             val enabled = parsed.title.isNotBlank()
             Box(
                 Modifier
@@ -305,3 +381,23 @@ private fun Confirm(label: String) {
     }
 }
 
+/** Pure: the "due today" preset sets today when the text names no day (a named day wins). */
+internal fun applyDueToday(parsed: QuickParse.Result, dueToday: Boolean, today: java.time.LocalDate): QuickParse.Result =
+    if (!dueToday || parsed.dueDay != null) parsed else parsed.copy(dueDay = today)
+
+/** Voice seam for the capture card (the real [dev.saikrishna.todo.ui.home.VoiceInput], or a test fake). */
+interface VoiceControl {
+    val listening: Boolean
+    val available: Boolean
+    fun start(onText: (String) -> Unit, onDone: (String?) -> Unit)
+    fun stop()
+    fun cancel()
+}
+
+private class RealVoice(private val v: dev.saikrishna.todo.ui.home.VoiceInput) : VoiceControl {
+    override val listening: Boolean get() = v.listening
+    override val available: Boolean get() = v.available
+    override fun start(onText: (String) -> Unit, onDone: (String?) -> Unit) = v.start(onText, onDone)
+    override fun stop() = v.stop()
+    override fun cancel() = v.cancel()
+}

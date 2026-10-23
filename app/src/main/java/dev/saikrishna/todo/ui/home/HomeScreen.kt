@@ -177,7 +177,12 @@ fun HomeScreen(
     val today = rememberToday()
     val zone = remember { ZoneId.systemDefault() }
 
-    var filter by rememberSaveable { mutableStateOf(Filter.Today) }
+    // v0.12: the app opens on Today unless Settings > Open app on says Overview.
+    var filter by rememberSaveable {
+        mutableStateOf(if (vm.settings.value?.openOn == dev.saikrishna.todo.data.StartPage.Overview) Filter.Overview else Filter.Today)
+    }
+    // v0.12 list chips: one choice per tab for this session (null / absent = All).
+    val chipFilter = remember { mutableStateMapOf<Filter, Long>() }
     var panelTaskId by rememberSaveable { mutableStateOf<Long?>(null) }
     var panelMode by rememberSaveable { mutableStateOf(PanelMode.Details) }
     val anchors = remember { PanelAnchors() }
@@ -236,6 +241,16 @@ fun HomeScreen(
     val planSummary = remember(all, today) { PlanLine.of(all, today) }
     val pages by remember(all, today, org) { derivedStateOf { buildPages(all, today, zone, leave.entries, org = org) } }
     val openCounts = remember(all) { all.filter { !it.done }.groupingBy { it.listId }.eachCount() }
+    // ---- v0.12 list chips (Today / Upcoming / Done): only when every list is in view together ----
+    val chipLists = remember(lists, org) { lists.filter { org.visible == null || it.id in org.visible } }
+    val chipsOn = selected == null && chipLists.size > 1
+    fun chipFor(page: Filter): Long? =
+        chipFilter[page]?.takeIf { id -> chipsOn && page != Filter.Overview && chipLists.any { it.id == id } }
+    val latestDoneChip by rememberUpdatedState(chipFor(Filter.Done))
+    fun shownItems(page: Filter): List<ListItem> {
+        val id = chipFor(page) ?: return pages[page]
+        return filterByList(pages[page], page, id, lists.firstOrNull { it.id == id }?.name ?: "this list")
+    }
     val menuAnchors = remember { PanelAnchors() }
     var menu by rememberSaveable { mutableStateOf<Long?>(null) }
 
@@ -283,12 +298,13 @@ fun HomeScreen(
     }
 
     // Auto-scroll only if the newly added row lands off-screen (spec 6.4). It is the last Today row.
-    val lastTodayRow = pages.today.lastOrNull() as? ListItem.Row
+    val todayShown = shownItems(Filter.Today) // v0.12: with the Today chip applied
+    val lastTodayRow = todayShown.lastOrNull() as? ListItem.Row
     LaunchedEffect(lastTodayRow?.task?.id) {
         val id = lastTodayRow?.task?.id ?: return@LaunchedEffect
         if (!pendingScroll) return@LaunchedEffect
         pendingScroll = false
-        revealItem(listStates.getValue(Filter.Today), rowKey(id), pages.today.lastIndex + 1) // +1: heading item
+        revealItem(listStates.getValue(Filter.Today), rowKey(id), todayShown.lastIndex + 1) // +1: heading item
     }
 
     // ---- notifications: asked in context, the first time a task gets a time (never at launch) ----
@@ -401,12 +417,41 @@ fun HomeScreen(
             onClearDone = {
                 haptics.tick()
                 // Only what the Done page shows: not rows still dwelling on the page they are leaving.
-                vm.clearDone(latestAll.filter { it.done && leave.entries[it.id] == null })
+                // v0.12: with a list chip on Done, only that list's completed tasks.
+                val only = latestDoneChip
+                vm.clearDone(latestAll.filter { it.done && leave.entries[it.id] == null && (only == null || it.listId == only) })
             },
             anchors = anchors,
             onDrop = { outcome, id -> vm.applyDrop(outcome, id) },
             onTag = { tag -> openSearch(SearchFilter(tag)) },
             onDragging = { if (it) HomeTestHooks.rowInput++; draggingRow = it },
+        )
+    }
+
+    // v0.12: with four tabs the theme toggle moved from the header into each page's heading row
+    // (next to the Overview greeting, at the end of the Today / Upcoming / Done title).
+    val themeButton: @Composable () -> Unit = {
+        ThemeToggleButton(
+            dark = darkNow,
+            onToggle = { applyTheme(if (darkNow) ThemeMode.Light else ThemeMode.Dark) },
+            onMenu = { haptics.tick(); chrome.dismiss(); menu = MenuIds.THEME_MENU },
+            modifier = Modifier.onGloballyPositioned { themeCenter = it.boundsInRoot().center },
+            anchor = Modifier.panelAnchor(menuAnchors, MenuIds.THEME_MENU),
+        )
+    }
+    val greetingName = vm.settings.collectAsState().value?.name.orEmpty()
+    val overviewModel = remember(all, lists, org, nowMinute, greetingName, today) {
+        val now = System.currentTimeMillis()
+        val shown = all.filter { org.shows(it) }
+        val stats = dev.saikrishna.todo.domain.OverviewStats.of(shown, lists.filter { org.visible == null || it.id in org.visible }, now, zone)
+        val hour = java.time.Instant.ofEpochMilli(now).atZone(zone).hour
+        val hello = dev.saikrishna.todo.domain.OverviewStats.greeting(hour)
+        OverviewModel(
+            stats = stats,
+            greeting = if (greetingName.isBlank()) hello else "$hello, $greetingName",
+            dateLine = overviewDateLine(today, stats),
+            task = { id -> latestAll.firstOrNull { it.id == id } },
+            meta = { t -> rowMeta(t, latestToday, showDue = true, org = org) },
         )
     }
 
@@ -474,9 +519,52 @@ fun HomeScreen(
                             },
                             label = "page fade",
                         ) { if (it == EnterExitState.Visible) 1f else 0f }
+                        val pageLayer = Modifier.graphicsLayer {
+                            // v0.11: the page also drifts down a touch and dims under the search
+                            // frost (same layer, so no extra offscreen buffer).
+                            val k = search.k.coerceIn(0f, 1f)
+                            alpha = fade * (1f - 0.35f * k)
+                            if (!reduced) translationY = SearchDrift.toPx() * k
+                            compositingStrategy = CompositingStrategy.ModulateAlpha
+                        }
+                        if (page == Filter.Overview) {
+                            OverviewPage(
+                                model = overviewModel,
+                                listState = listStates.getValue(page),
+                                contentPadding = padding,
+                                themeButton = themeButton,
+                                onTarget = { t ->
+                                    haptics.tick()
+                                    when (t) {
+                                        OverviewTarget.Today -> filter = Filter.Today
+                                        OverviewTarget.Upcoming -> filter = Filter.Upcoming
+                                        OverviewTarget.Week -> filter = Filter.Done
+                                        OverviewTarget.Overdue -> openSearch(
+                                            SearchFilter(dev.saikrishna.todo.domain.ViewFilter(due = dev.saikrishna.todo.domain.DueFilter.Overdue)),
+                                        )
+                                    }
+                                },
+                                onList = { id ->
+                                    haptics.tick()
+                                    // Chips when all lists are in view; otherwise pick the list itself.
+                                    if (chipsOn && chipLists.any { it.id == id }) chipFilter[Filter.Today] = id
+                                    else vm.selectList(id)
+                                    filter = Filter.Today
+                                },
+                                onPlan = { haptics.tick(); onOpenPlan() },
+                                onToggle = { t, checked -> actions.onToggle(t, checked, pageOf(t, today)) },
+                                onOpen = actions.onOpen,
+                                taskAnchor = { id -> Modifier.panelAnchor(anchors, id) },
+                                animatorScale = LocalAnimatorScale.current,
+                                modifier = pageLayer,
+                            )
+                            return@AnimatedContent
+                        }
+                        val items = shownItems(page)
+                        val chipId = chipFor(page)
                         TaskListPage(
                             page = page,
-                            items = pages[page],
+                            items = items,
                             listState = listStates.getValue(page),
                             contentPadding = padding,
                             leave = leave,
@@ -484,15 +572,18 @@ fun HomeScreen(
                             tracker = tracker,
                             actions = actions,
                             heading = headingFor(page, today),
-                            caption = captionFor(page, pages),
-                            modifier = Modifier.graphicsLayer {
-                                // v0.11: the page also drifts down a touch and dims under the search
-                                // frost (same layer, so no extra offscreen buffer).
-                                val k = search.k.coerceIn(0f, 1f)
-                                alpha = fade * (1f - 0.35f * k)
-                                if (!reduced) translationY = SearchDrift.toPx() * k
-                                compositingStrategy = CompositingStrategy.ModulateAlpha
+                            caption = captionFor(page, pages, items, chipId != null),
+                            headingTrailing = themeButton,
+                            headingExtra = {
+                                if (chipsOn) {
+                                    ListChipRow(
+                                        options = chipOptions(pages[page], chipLists, chipId),
+                                        selected = chipId,
+                                        onSelect = { id -> if (id == null) chipFilter.remove(page) else chipFilter[page] = id },
+                                    )
+                                }
                             },
+                            modifier = pageLayer,
                         )
                     }
                 }
@@ -505,15 +596,6 @@ fun HomeScreen(
                         .onGloballyPositioned { if (!search.active) search.circle = it.boundsInRoot() }
                         // The pill takes over the circle's place (reduced motion: it crossfades).
                         .graphicsLayer { if (!reduced && search.active) alpha = 0f },
-                    themeButton = {
-                        ThemeToggleButton(
-                            dark = darkNow,
-                            onToggle = { applyTheme(if (darkNow) ThemeMode.Light else ThemeMode.Dark) },
-                            onMenu = { haptics.tick(); chrome.dismiss(); menu = MenuIds.THEME_MENU },
-                            modifier = Modifier.onGloballyPositioned { themeCenter = it.boundsInRoot().center },
-                            anchor = Modifier.panelAnchor(menuAnchors, MenuIds.THEME_MENU),
-                        )
-                    },
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .onSizeChanged { topPx.intValue = it.height }
@@ -562,13 +644,16 @@ fun HomeScreen(
                             // Show the page the new task lands on.
                             val future = parsed.dueDay != null && parsed.dueDay > today
                             val target = if (future) Filter.Upcoming else Filter.Today
-                            if (filter != target) filter = target
+                            // v0.12: Overview stays put (its numbers update); a list chip on the
+                            // target tab sends the task to that list unless it names one.
+                            val hint = chipFor(target)
+                            if (filter != target && filter != Filter.Overview) filter = target
                             // "#list" naming a list that is not in view: show it so the new row is seen.
                             val to = parsed.list
                             // (A list hidden by the focus mode stays hidden: that was the user's choice.)
                             if (to != null && selected != null && to.id != selected) vm.selectList(to.id)
                             pendingScroll = !future
-                            vm.add(parsed)
+                            vm.add(parsed, listHint = hint)
                             if (parsed.dueMinute != null) askNotificationsIfNeeded()
                         },
                     )
@@ -720,14 +805,13 @@ private fun HomeHeader(
     onFilter: (Filter) -> Unit,
     onOpenSearch: () -> Unit,
     searchCircle: Modifier,
-    themeButton: @Composable BoxScope.() -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     Box(modifier.fillMaxWidth()) {
         // Blurred, tinted edge behind the controls, fading out (eased) by 30 dp below them.
         GlassEdgeTop(solidHeight = statusTop + HeaderTop + PillSpec.Height)
-        HeaderControls(filter, onFilter, onOpenSearch, searchCircle, themeButton)
+        HeaderControls(filter, onFilter, onOpenSearch, searchCircle)
     }
 }
 
@@ -737,27 +821,26 @@ private fun HeaderControls(
     onFilter: (Filter) -> Unit,
     onOpenSearch: () -> Unit,
     searchCircle: Modifier,
-    themeButton: @Composable BoxScope.() -> Unit,
 ) {
-    // v0.9.1: the theme toggle mirrors search on the right (same 44 dp glass circle).
-    // v0.9: search (left) + the centred Today/Upcoming/Done pill. Settings and the lists moved to
-    // the bottom-left lists button; the pill keeps symmetric insets so it stays screen-centred.
-    Box(
+    // v0.12: search (left) + the Overview/Today/Upcoming/Done pill centred in the rest of the row
+    // (mock "Overview A"). The theme toggle lives in the page headings now.
+    androidx.compose.foundation.layout.Row(
         Modifier
             .fillMaxWidth()
             .statusBarsPadding()
             .padding(start = Spacing.screen, end = Spacing.screen, top = HeaderTop, bottom = 28.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        CircleIconButton(AppIcons.Search, "Search", onOpenSearch, Modifier.align(Alignment.CenterStart).then(searchCircle), glass = true)
-        SegmentedPill(
-            options = Filter.entries.toList(),
-            selected = filter,
-            label = { it.title },
-            onSelect = onFilter,
-            style = PillStyle.Floating,
-            modifier = Modifier.align(Alignment.Center).padding(horizontal = PillSpec.Control + 10.dp),
-        )
-        Box(Modifier.align(Alignment.CenterEnd)) { themeButton() }
+        CircleIconButton(AppIcons.Search, "Search", onOpenSearch, searchCircle, glass = true)
+        Box(Modifier.weight(1f).padding(start = 10.dp), contentAlignment = Alignment.Center) {
+            SegmentedPill(
+                options = Filter.entries.toList(),
+                selected = filter,
+                label = { it.title },
+                onSelect = onFilter,
+                style = PillStyle.Floating,
+            )
+        }
     }
 }
 
@@ -766,15 +849,33 @@ private val HeaderTop = 8.dp
 private val HeadingDate = java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMMM")
 
 private fun headingFor(page: Filter, today: LocalDate): String = when (page) {
+    Filter.Overview -> "Overview"
     Filter.Today -> today.format(HeadingDate.withLocale(java.util.Locale.getDefault()))
     Filter.Upcoming -> "Coming up"
     Filter.Done -> "Done"
 }
 
-private fun captionFor(page: Filter, pages: Pages): String? = when (page) {
-    Filter.Today -> when (pages.openToday) { 0 -> null; 1 -> "1 thing to do"; else -> "${pages.openToday} things to do" }
-    Filter.Upcoming -> pages.upcoming.count { it is ListItem.Row }.let { if (it == 0) null else if (it == 1) "1 planned" else "$it planned" }
-    Filter.Done -> null // the "Clear done" row already shows the count
+private fun captionFor(page: Filter, pages: Pages, shown: List<ListItem>, chip: Boolean): String? {
+    val rows = shown.count { it is ListItem.Row }
+    return when (page) {
+        Filter.Overview -> null
+        Filter.Today -> {
+            val n = if (chip) shown.count { it is ListItem.Row && !it.task.done } else pages.openToday
+            when (n) { 0 -> null; 1 -> "1 thing to do"; else -> "$n things to do" }
+        }
+        Filter.Upcoming -> if (rows == 0) null else if (rows == 1) "1 planned" else "$rows planned"
+        Filter.Done -> null // the "Clear done" row already shows the count
+    }
+}
+
+/** Overview date line: "Friday, 23 October · 3 to do" (or "· all done"). */
+internal fun overviewDateLine(today: LocalDate, stats: dev.saikrishna.todo.domain.OverviewStats): String {
+    val date = today.format(HeadingDate.withLocale(java.util.Locale.getDefault()))
+    return when {
+        stats.todayOpen > 0 -> "$date · ${stats.todayOpen} to do"
+        stats.todayTotal > 0 -> "$date · all done"
+        else -> date
+    }
 }
 
 private suspend fun revealItem(listState: LazyListState, key: String, index: Int) {

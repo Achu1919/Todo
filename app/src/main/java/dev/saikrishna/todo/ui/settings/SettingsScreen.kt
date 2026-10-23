@@ -134,6 +134,30 @@ fun SettingsScreen(
                     onSelect = { vm.setTheme(it) },
                 )
             }
+            Divider()
+            // v0.12: where the app opens, and the optional name in the Overview greeting.
+            Column(Modifier.padding(16.dp)) {
+                Text("Open app on", style = AppTheme.type.title, color = c.ink)
+                Spacer(Modifier.height(12.dp))
+                SegmentedPill(
+                    options = dev.saikrishna.todo.data.StartPage.entries.toList(),
+                    selected = settings.openOn,
+                    label = { it.name },
+                    onSelect = { vm.setOpenOn(it) },
+                )
+            }
+            Divider()
+            Column(Modifier.padding(16.dp)) {
+                Text("Your name", style = AppTheme.type.title, color = c.ink)
+                Text("Shown in the Overview greeting. Optional.", style = AppTheme.type.meta, color = c.inkSecondary)
+                Spacer(Modifier.height(12.dp))
+                val nameState = androidx.compose.foundation.text.input.rememberTextFieldState(settings.name)
+                androidx.compose.runtime.LaunchedEffect(nameState) {
+                    androidx.compose.runtime.snapshotFlow { nameState.text.toString() }
+                        .collect { if (it.trim() != vm.settings.value?.name) vm.setGreetingName(it) }
+                }
+                Field(nameState, "First name", Modifier.fillMaxWidth()) { }
+            }
         }
 
         GroupLabel("Reminders")

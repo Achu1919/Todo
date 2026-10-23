@@ -317,7 +317,7 @@ private fun NewListRow(onCreate: (String) -> Unit) {
 }
 
 @Composable
-private fun Field(state: TextFieldState, hint: String, modifier: Modifier = Modifier, lines: Int = 1, onDone: () -> Unit) {
+internal fun Field(state: TextFieldState, hint: String, modifier: Modifier = Modifier, lines: Int = 1, onDone: () -> Unit) {
     val c = AppTheme.colors
     BasicTextField(
         state = state,

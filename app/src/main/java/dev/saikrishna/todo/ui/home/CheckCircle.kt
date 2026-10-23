@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -68,6 +69,12 @@ fun CheckCircle(
     label: String,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    /**
+     * v0.12: list colour for the ring, a faint wash inside it while open, and the fill once
+     * checked. Passed fresh each composition (never tweened), so a theme switch swaps it
+     * instantly with the rest of the theme; only the fill/check progress animates.
+     */
+    tint: Color? = null,
 ) {
     val c = AppTheme.colors
     val reduced = LocalReducedMotion.current
@@ -147,12 +154,15 @@ fun CheckCircle(
         // Ring (stroke), morphing with the fill so the closed state is one clean shape.
         val stroke = 1.5.dp.toPx()
         shapeAt(r - stroke / 2f)
-        drawPath(scaled, c.inkStroke, style = Stroke(stroke))
+        if (tint != null) {
+            if (f < 0.999f) drawPath(scaled, tint.copy(alpha = tint.alpha * 0.10f))
+            drawPath(scaled, tint, style = Stroke(1.75.dp.toPx()))
+        } else drawPath(scaled, c.inkStroke, style = Stroke(stroke))
 
         // Fill: radius follows the raw spring value, so Pop's overshoot briefly exceeds r.
         if (f > 0.001f) {
             shapeAt(r * f)
-            drawPath(scaled, c.ink) // ink fill, like the selection capsule
+            drawPath(scaled, tint ?: c.ink) // ink fill, like the selection capsule (v0.12: or the list colour)
         }
 
         val k = check.value
@@ -165,9 +175,13 @@ fun CheckCircle(
             checkSeg.reset()
             measure.getSegment(0f, measure.length * k, checkSeg, true)
             drawPath(
-                checkSeg, c.onInk,
+                checkSeg, if (tint == null) c.onInk else checkOn(tint),
                 style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
             )
         }
     }
 }
+
+/** Check mark colour on a list-colour fill: white, or near-black on a light pastel. */
+internal fun checkOn(fill: Color): Color =
+    if (fill.luminance() > 0.6f) Color(0xE6101418) else Color.White
