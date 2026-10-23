@@ -674,6 +674,69 @@ Local git: one commit per step (`git log`): baseline 0.7.4, domain + schema 5, U
 ### Risks
 - ColorOS can defer or kill background jobs ("auto launch" off, strict battery optimisation). Glance renders through WorkManager, so updates may lag until Todo is opened once. Logcat tag `TodoWidget` (plus `WM-` and `GlanceAppWidget`) shows failures.
 
+## Milestone 12 (v0.12.0, code 21): Overview, list colours + chips, add-task widgets W1–W4
+
+Built from the v0.12 mockups (branch `mock/v0.12-design` is reference only; no mock code ships).
+
+### What changed
+- **Overview tab** (`ui/home/OverviewPage.kt`, `domain/OverviewStats.kt`): new first tab, `Overview · Today · Upcoming · Done`. It shows:
+  - a greeting with the date and the theme toggle beside it;
+  - a Today progress ring with a "Plan your day" button;
+  - four count tiles (Today, Overdue, Upcoming, This week);
+  - a weekly bar chart and a streak pill;
+  - Next up;
+  - per-list progress bars in each list's colour.
+  Tiles and rows jump to their tab, list or filter. The header pill morphs and slides like the other tabs; with reduced motion it crossfades.
+- **Open-on setting:** Settings has "Open app on: Today / Overview". The default is Today. Settings also has a Name field used by the greeting.
+- **List accents** (`TaskRow`, `CheckCircle`, `ListDecor`): each row has a list-colour bar on its left edge and a tinted checkbox ring. The done fill uses the list colour, and the bar dims when a task is done. State colours go through `animateStateColor`, so the theme reveal stays consistent. Press rules are unchanged (no square ripple).
+- **Chip row** (`ui/home/ListChips.kt`) on Today, Upcoming and Done: All, then each list with its open count. The selected chip is tinted in the list colour. Filtering uses the existing item animations. The filter is per-tab session state, held in the ViewModel and not persisted. A task added while a chip is selected goes to that list.
+- **Header pill:** when four equal segments don't fit, segments are sized to their labels, and the indicator interpolates between those widths.
+- **Widgets** (`widget/QuickWidgets.kt`, Glance 1.2.0). Each one opens `CaptureActivity` instantly with a `CapturePreset` (list, due today, voice):
+  - W1, a 2x1 pill: Add a task plus mic.
+  - W2, a 1x1 round +. It does not resize.
+  - W3, a 4x1 quick-lists widget: + and the Today chip (due today), then the first two lists by position, then mic. Labels and colours come from the data and refresh when lists change. Chips drop by width, using about 5.8 dp per character at 13 sp, measured on renders.
+  - W4, a 2x2 hub: the next open task in one line (its time goes in the header), or "What's next?" when there is none; Add a task; Voice; Plan (opens Plan).
+    - At 210 dp or taller it shows a "Next · time" label and two lines of the title.
+    - Below 160 dp it drops the header.
+- **Widget look:** our own colours, in light and dark (`values(-night)/colors.xml`). Each widget has a `previewLayout` and a real rendered `previewImage` (`drawable-nodpi/widget_*_preview_image.png`, from `V12ScreenshotTest`). The Today widget is unchanged.
+- **Widget robustness:**
+  - The PendingIntents are unique because each preset is encoded in the data URI.
+  - Keep rules cover all five receivers and widgets (no R8 constructor stripping).
+  - WorkManager stays at 2.11.2.
+  - A `widget_quick_error` layout is used.
+- **Capture card:** gained a "Today" chip and a mic button. With the voice preset it starts listening and keeps the keyboard down (soft input mode).
+- **No schema change.** The DB stays at v5, so no migration was needed.
+
+### The `out/` incident (Oct 23)
+At about 16:40 IST the workspace was restored or migrated (the box later rebooted at 18:23). Every gitignored output was lost: `out/` (shots and `todo-release.apk`), `build/`, `.gradle/` and `~/.gradle/caches`. Tracked files and `../*.apk` survived.
+- **No Gradle task deletes `out/`:** `copyDebugApk` and `copyReleaseApk` are `Copy` tasks, and `clean` only removes `app/build`.
+- **Mitigation:** the `mirrorOut` task copies `out/` to `../todo-artifacts/out` after `testDebugUnitTest`, `copyDebugApk` and `copyReleaseApk`. All shots were regenerated.
+
+### Tests
+- 363 tests in total: 287 unit tests plus 76 screenshot tests (`-Pshots`). All pass.
+- New suites:
+  - `OverviewStatsTest` (11): counts, streak, week chart, timezone and day boundaries.
+  - `ListChipsTest` (7).
+  - `CapturePresetTest` (6) and `CapturePresetScreenTest` (6).
+  - `QuickWidgetsTest` (14): trees, chip fit, intents and presets.
+  - `V12ScreenshotTest` (13).
+- `HeaderEdgeTest` hides the theme toggle through `HomeTestHooks.hideThemeToggle`, because the toggle now sits inside the measurement strip.
+- `verify_release.py` section 4 checks each new receiver and widget by name. It also confirms each receiver is exported, has an `APPWIDGET_UPDATE` filter and provider meta-data, and that its provider xml has `previewLayout`, `previewImage` and `initialLayout`. The regex accepts aapt2's `exported=true`.
+
+### Screenshots (`out/shots/`, mirrored to `../todo-artifacts/out/shots/`)
+- Contact sheets: `v012-overview.png`, `v012-categories.png`, `v012-widgets.png` (built by `scripts/v012_sheets.py`).
+- Filmstrips:
+  - `v012-tab-overview-filmstrip-{light,dark,reduced}.png`;
+  - `v012-chip-filter-filmstrip-{light,dark}.png`.
+- Singles: `v012-overview-*`, `v012-chips-{today,work,upcoming,done}-*`, `v012-w1..w4-*`, `v012-preview-*`, `v012-capture-*`.
+
+### Needs a device
+- Voice auto-start and the mic permission prompt when launched from a widget; the keyboard staying down.
+- How the launcher renders and resizes W1–W4. Whether the picker shows the previews.
+- Whether W3 fits three chips on a real 4x1. It is tight at 340 dp and fits at 370 dp.
+- Plan opening from W4.
+- Overview tile navigation, and the open-on setting on cold start.
+
 ## Milestone 11 (v0.11.0, code 20): in-place search morph
 
 The pushed Search screen is gone. Search is now a morph on Home, and Home stays composed throughout. The technique was modelled on a reference recording Sai provided; the code and visuals are our own, with no third-party assets.
