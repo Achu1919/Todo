@@ -55,6 +55,8 @@ import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
+import dev.saikrishna.todo.ui.home.Filter
+import dev.saikrishna.todo.ui.home.PageLink
 
 /** Our widget palette (light / dark), from the app's ink and accent tokens; the background and
  * "+" fill are res colours (widget_bg / widget_ink, values + values-night). */
@@ -166,7 +168,7 @@ fun TodayWidgetContent(context: Context, data: WidgetData?) {
             Text(
                 "Today",
                 style = TextStyle(color = WidgetColors.ink, fontSize = 20.sp, fontFamily = FontFamily.Serif),
-                modifier = GlanceModifier.clickable(actionStartActivity(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))),
+                modifier = GlanceModifier.clickable(actionStartActivity(PageLink.intent(context, Filter.Today))),
             )
             Spacer(GlanceModifier.width(8.dp))
             if (data != null && data.openToday > 0) {
@@ -204,7 +206,7 @@ fun TodayWidgetContent(context: Context, data: WidgetData?) {
                     "+${data.more} more",
                     style = TextStyle(color = WidgetColors.inkSecondary, fontSize = 12.sp),
                     modifier = GlanceModifier.padding(start = 34.dp, top = 2.dp)
-                        .clickable(actionStartActivity(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))),
+                        .clickable(actionStartActivity(PageLink.intent(context, Filter.Today))),
                 )
             }
         }

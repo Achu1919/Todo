@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -109,6 +110,12 @@ fun OverviewPage(
     taskAnchor: (Long) -> Modifier,
     modifier: Modifier = Modifier,
     animatorScale: Float = 1f,
+    /** v0.13: Settings moved from the old lists panel to a gear next to the greeting. */
+    settingsButton: (@Composable () -> Unit)? = null,
+    /** v0.13: list management (Settings > Lists) and the saved views, also from the old panel. */
+    views: List<dev.saikrishna.todo.data.SavedView> = emptyList(),
+    onView: (dev.saikrishna.todo.data.SavedView) -> Unit = {},
+    onManageLists: () -> Unit = {},
 ) {
     val s = model.stats
     val reduced = LocalReducedMotion.current
@@ -129,6 +136,7 @@ fun OverviewPage(
                     Text(model.greeting, style = AppTheme.type.display, color = AppTheme.colors.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(model.dateLine, style = AppTheme.type.body, color = AppTheme.colors.inkSecondary, modifier = Modifier.padding(top = 2.dp))
                 }
+                if (settingsButton != null) { settingsButton(); Spacer(Modifier.width(8.dp)) }
                 themeButton()
             }
         }
@@ -176,9 +184,12 @@ fun OverviewPage(
                 )
             }
         }
-        if (s.lists.isNotEmpty()) {
-            item(key = "lists", contentType = "lists") {
-                ListsCard(s, { grow.value }, onList, Modifier.padding(top = 18.dp).then(slot(6)))
+        item(key = "lists", contentType = "lists") {
+            ListsCard(s, { grow.value }, onList, onManageLists, Modifier.padding(top = 18.dp).then(slot(6)))
+        }
+        if (views.isNotEmpty()) {
+            item(key = "views", contentType = "views") {
+                ViewsCard(views, onView, Modifier.padding(top = 18.dp).then(slot(7)))
             }
         }
     }
@@ -386,10 +397,22 @@ fun WeekBars(values: List<Int>, todayIndex: Int, grow: () -> Float, modifier: Mo
 }
 
 @Composable
-private fun ListsCard(s: OverviewStats, grow: () -> Float, onList: (Long) -> Unit, modifier: Modifier) {
+private fun ListsCard(s: OverviewStats, grow: () -> Float, onList: (Long) -> Unit, onManage: () -> Unit, modifier: Modifier) {
     val c = AppTheme.colors
     Column(modifier) {
-        SectionLabel("Lists", Modifier.padding(bottom = 8.dp))
+        Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            SectionLabel("Lists", Modifier.weight(1f))
+            Text(
+                "Manage",
+                style = AppTheme.type.label,
+                color = c.accent,
+                modifier = Modifier
+                    .clip(Shapes.full)
+                    .clickable(role = Role.Button, onClickLabel = "Manage lists", onClick = onManage)
+                    .testTag("lists-manage")
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+            )
+        }
         TapCard(null, pad = 6.dp) {
             Column {
                 for (p in s.lists) {
@@ -417,6 +440,47 @@ private fun ListsCard(s: OverviewStats, grow: () -> Float, onList: (Long) -> Uni
                         }
                         Spacer(Modifier.width(10.dp))
                         Text("${p.open} open", style = AppTheme.type.meta, color = c.inkSecondary, maxLines = 1)
+                    }
+                }
+                // New list / rename / colour / reorder / delete all live in Settings > Lists.
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(Shapes.md)
+                        .clickable(role = Role.Button, onClickLabel = "New list", onClick = onManage)
+                        .testTag("lists-new")
+                        .padding(horizontal = 10.dp, vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(AppIcons.Plus, null, tint = c.inkSecondary, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("New list", style = AppTheme.type.body, color = c.inkSecondary, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ViewsCard(views: List<dev.saikrishna.todo.data.SavedView>, onView: (dev.saikrishna.todo.data.SavedView) -> Unit, modifier: Modifier) {
+    val c = AppTheme.colors
+    Column(modifier) {
+        SectionLabel("Saved views", Modifier.padding(bottom = 8.dp))
+        TapCard(null, pad = 6.dp) {
+            Column {
+                for (v in views) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(Shapes.md)
+                            .clickable(role = Role.Button, onClickLabel = "Open ${v.name}") { onView(v) }
+                            .padding(horizontal = 10.dp, vertical = 11.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(AppIcons.Bookmark, null, tint = c.inkSecondary, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text(v.name, style = AppTheme.type.body, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        Icon(AppIcons.ChevronRight, null, tint = c.inkTertiary, modifier = Modifier.size(16.dp))
                     }
                 }
             }

@@ -171,6 +171,10 @@ object QuickWidgets {
     fun plan(context: Context): Intent = PlanReminder.planActivityIntent(context)
 
     fun openApp(context: Context): Intent = Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    /** v0.13: a specific page (Home, a Todo view or Calendar). */
+    fun page(context: Context, page: dev.saikrishna.todo.ui.home.Filter): Intent =
+        dev.saikrishna.todo.ui.home.PageLink.intent(context, page)
 }
 
 /** Our list palette, light / dark (from the app theme). */
@@ -319,7 +323,9 @@ fun HubContent(context: Context, data: QuickData) {
     ) {
         if (!compact) {
             Row(
-                GlanceModifier.fillMaxWidth().padding(start = 6.dp, top = 2.dp).clickable(actionStartActivity(QuickWidgets.openApp(context))),
+                GlanceModifier.fillMaxWidth().padding(start = 6.dp, top = 2.dp)
+                    // v0.13: the header shows the date, so it opens Calendar.
+                    .clickable(actionStartActivity(QuickWidgets.page(context, dev.saikrishna.todo.ui.home.Filter.Calendar))),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(GlanceModifier.size(16.dp).cornerRadius(8.dp).background(ImageProvider(R.drawable.widget_round_bg)), contentAlignment = Alignment.Center) {
@@ -333,7 +339,7 @@ fun HubContent(context: Context, data: QuickData) {
         // The next task fills the space above the buttons; tap opens it.
         Column(
             GlanceModifier.fillMaxWidth().defaultWeight().padding(start = 6.dp, end = 4.dp, bottom = 8.dp)
-                .clickable(actionStartActivity(if (next != null) openTaskIntent(context, next.id) else QuickWidgets.openApp(context))),
+                .clickable(actionStartActivity(if (next != null) openTaskIntent(context, next.id) else QuickWidgets.page(context, dev.saikrishna.todo.ui.home.Filter.Today))),
             verticalAlignment = Alignment.Bottom,
         ) {
             if (next != null && roomy) {

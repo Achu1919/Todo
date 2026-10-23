@@ -218,6 +218,54 @@ fun ListsScreen(vm: TodoViewModel, onBack: () -> Unit) {
 
         GroupLabel("New list")
         Card { NewListRow(onCreate = { name -> vm.createList(name, (lists.size + 3) % ListPalette.size, null, ListArea.Personal) }) }
+
+        // v0.13: Focus and saved views moved here from the old lists panel.
+        val prefs by vm.focusPrefs.collectAsStateWithLifecycle()
+        val focus = remember(prefs) { vm.focusAt(System.currentTimeMillis()) }
+        GroupLabel("Focus")
+        Card {
+            Column(Modifier.padding(16.dp)) {
+                dev.saikrishna.todo.ui.components.SegmentedPill(
+                    options = FocusMode.entries.toList(),
+                    selected = focus,
+                    label = { it.name },
+                    onSelect = { haptics.tick(); vm.setFocus(it) },
+                )
+                Text(
+                    dev.saikrishna.todo.ui.home.focusCaption(prefs, focus).ifEmpty { "Work or Personal shows only that area's lists." },
+                    style = AppTheme.type.meta, color = c.inkSecondary, modifier = Modifier.padding(top = 8.dp, start = 2.dp),
+                )
+            }
+        }
+        val views by vm.views.collectAsStateWithLifecycle()
+        GroupLabel("Saved views")
+        Card {
+            if (views.isEmpty()) {
+                Text(
+                    "Save a search with its filters to keep it here and on Home.",
+                    style = AppTheme.type.meta, color = c.inkSecondary, modifier = Modifier.padding(16.dp),
+                )
+            }
+            views.forEachIndexed { i, v ->
+                if (i > 0) Divider()
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp).heightIn(min = 52.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(AppIcons.Bookmark, null, tint = c.inkSecondary, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Text(v.name, style = AppTheme.type.body, color = c.ink, modifier = Modifier.weight(1f))
+                    Box(
+                        Modifier
+                            .size(44.dp)
+                            .clip(Shapes.full)
+                            .clickable(role = Role.Button, onClickLabel = "Delete ${v.name}") { haptics.tick(); vm.deleteView(v.id) }
+                            .semantics { contentDescription = "Delete ${v.name}" },
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(AppIcons.Trash, null, tint = c.inkTertiary, modifier = Modifier.size(18.dp)) }
+                }
+            }
+        }
     }
 }
 

@@ -320,6 +320,12 @@ class TodoViewModel(
     fun requestOpen(id: Long, snooze: Boolean = false) { openAsSnooze = snooze; _openRequest.value = id }
     fun consumeOpenRequest() { _openRequest.value = null }
 
+    // v0.13: a widget or notification asks for a page (Home, a Todo view, Calendar).
+    private val _pageRequest = MutableStateFlow<Filter?>(null)
+    val pageRequest: StateFlow<Filter?> = _pageRequest.asStateFlow()
+    fun requestPage(page: Filter) { _pageRequest.value = page }
+    fun consumePageRequest() { _pageRequest.value = null }
+
     // ---- v0.8 morning planning ----
     val planPrefs: StateFlow<dev.saikrishna.todo.data.PlanPrefs> = settingsRepository.plan
         .stateIn(viewModelScope, SharingStarted.Eagerly, dev.saikrishna.todo.data.PlanPrefs())

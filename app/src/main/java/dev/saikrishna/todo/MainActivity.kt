@@ -106,5 +106,6 @@ class MainActivity : ComponentActivity() {
         val id = intent?.getLongExtra(Reminders.EXTRA_OPEN_TASK, -1L) ?: -1L
         if (id >= 0) vm.requestOpen(id)
         if (intent?.getBooleanExtra(dev.saikrishna.todo.reminders.PlanReminder.EXTRA_OPEN_PLAN, false) == true) vm.requestPlan()
+        dev.saikrishna.todo.ui.home.PageLink.from(intent)?.let { vm.requestPage(it) }
     }
 }

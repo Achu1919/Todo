@@ -56,6 +56,7 @@ import androidx.compose.runtime.produceState
 import dev.saikrishna.todo.ui.panel.panelAnchor
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.onSizeChanged
@@ -179,10 +180,24 @@ fun HomeScreen(
     val today = rememberToday()
     val zone = remember { ZoneId.systemDefault() }
 
-    // v0.12: the app opens on Today unless Settings > Open app on says Overview.
+    // v0.13: Settings > Open app on: Home, Todo (Today) or Calendar.
     var filter by rememberSaveable {
-        mutableStateOf(if (vm.settings.value?.openOn == dev.saikrishna.todo.data.StartPage.Home) Filter.Overview else Filter.Today)
+        mutableStateOf(
+            when (vm.settings.value?.openOn) {
+                dev.saikrishna.todo.data.StartPage.Home -> Filter.Overview
+                dev.saikrishna.todo.data.StartPage.Calendar -> Filter.Calendar
+                else -> Filter.Today
+            },
+        )
     }
+    // v0.13: the Todo section remembers its last view (the header's Todo segment returns to it).
+    var lastTodo by rememberSaveable { mutableStateOf(Filter.Today) }
+    LaunchedEffect(filter) { if (filter.isTodoView) lastTodo = filter }
+    val switcher = remember { SwitcherState() }
+    var switcherOrigin by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+    var calendarDay by rememberSaveable { mutableStateOf<Long?>(null) }
+    val composerPicksState = remember { mutableStateOf(dev.saikrishna.todo.domain.ComposerDraft.Picks()) }
+    var composerPicks by composerPicksState
     // v0.12 list chips: one choice per tab for this session (null / absent = All).
     val chipFilter = remember { mutableStateMapOf<Filter, Long>() }
     var panelTaskId by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -225,8 +240,9 @@ fun HomeScreen(
         }
     }
     val focus = remember(focusPrefs, nowMinute) { vm.focusAt(System.currentTimeMillis()) }
-    // A selected list outside the focus area falls back to "all lists of that area".
-    val selected = selectedList?.takeIf { id -> lists.any { it.id == id && (focus.area == null || it.area == focus.area) } }
+    // v0.13: the lists panel (single-list pick) is gone; lists filter through the chips only.
+    @Suppress("UNUSED_VARIABLE") val legacySelected = selectedList
+    val selected: Long? = null
     val org = remember(lists, subtasks, selected, focus) {
         OrgView(
             lists = lists.associateBy { it.id },
@@ -239,10 +255,7 @@ fun HomeScreen(
             subtasks = subtasks,
         )
     }
-    val chip = listChipState(lists, selected, focus)
-    val planSummary = remember(all, today) { PlanLine.of(all, today) }
     val pages by remember(all, today, org) { derivedStateOf { buildPages(all, today, zone, leave.entries, org = org) } }
-    val openCounts = remember(all) { all.filter { !it.done }.groupingBy { it.listId }.eachCount() }
     // ---- v0.12 list chips (Today / Upcoming / Done): only when every list is in view together ----
     val chipLists = remember(lists, org) { lists.filter { org.visible == null || it.id in org.visible } }
     val chipsOn = selected == null && chipLists.size > 1
@@ -283,6 +296,16 @@ fun HomeScreen(
             search.backCancelled()
             throw e
         }
+    }
+    val pageRequest by vm.pageRequest.collectAsStateWithLifecycle()
+    LaunchedEffect(pageRequest) {
+        val page = pageRequest ?: return@LaunchedEffect
+        search.close()
+        snapshotFlow { homeOnTop() && !search.active }.first { it }
+        menu = null
+        switcher.close()
+        filter = page
+        vm.consumePageRequest()
     }
     LaunchedEffect(openRequest) {
         val id = openRequest ?: return@LaunchedEffect
@@ -362,25 +385,6 @@ fun HomeScreen(
         onOpenSearch()
         search.open()
     }
-    // v0.9 lists button. While typing, a tap first dismisses editing (keyboard down, composer
-    // unfocused), waits for the keyboard to finish leaving (max 600 ms) and one frame, then opens
-    // the panel, so it grows from the button's resting place and never fights the IME animation.
-    // The button itself is not focusable for text, so it never steals focus from the field.
-    val imeInsets = WindowInsets.ime
-    val densityNow = LocalDensity.current
-    val openListsPanel: () -> Unit = {
-        haptics.tick()
-        val typing = chrome.focused || imeInsets.getBottom(densityNow) > 0
-        if (!typing) menu = MenuIds.LIST_PICKER
-        else {
-            chrome.dismiss()
-            scope.launch {
-                kotlinx.coroutines.withTimeoutOrNull(600) { snapshotFlow { imeInsets.getBottom(densityNow) }.first { it == 0 } }
-                androidx.compose.runtime.withFrameNanos { }
-                menu = MenuIds.LIST_PICKER
-            }
-        }
-    }
     HomeTestHooks.chrome = chrome
     // v0.9.1 theme toggle: tap = light <-> dark (overrides System), stored in the theme setting;
     // the switch is a circular reveal from the button (ThemeReveal), retargeted if tapped again.
@@ -427,6 +431,14 @@ fun HomeScreen(
             onDrop = { outcome, id -> vm.applyDrop(outcome, id) },
             onTag = { tag -> openSearch(SearchFilter(tag)) },
             onDragging = { if (it) HomeTestHooks.rowInput++; draggingRow = it },
+            onRepeat = { t, action ->
+                haptics.tick()
+                when (action) {
+                    RepeatAction.Pause -> vm.setRepeatPaused(t.id, true)
+                    RepeatAction.Resume -> vm.setRepeatPaused(t.id, false)
+                    RepeatAction.Stop -> vm.stopRepeat(t.id)
+                }
+            },
         )
     }
 
@@ -558,16 +570,47 @@ fun HomeScreen(
                                 },
                                 onList = { id ->
                                     haptics.tick()
-                                    // Chips when all lists are in view; otherwise pick the list itself.
-                                    if (chipsOn && chipLists.any { it.id == id }) chipFilter[Filter.Today] = id
-                                    else vm.selectList(id)
+                                    // v0.13: a list opens Today with that list's chip on.
+                                    if (chipLists.any { it.id == id }) chipFilter[Filter.Today] = id
                                     filter = Filter.Today
                                 },
+                                settingsButton = {
+                                    CircleIconButton(AppIcons.Gear, "Settings", { haptics.tick(); onOpenSettings() }, Modifier.testTag("home-settings"), glass = true)
+                                },
+                                views = views,
+                                onView = { v ->
+                                    haptics.tick()
+                                    openSearch(SearchFilter(dev.saikrishna.todo.domain.ViewFilter.decode(v.filter), query = v.query))
+                                },
+                                onManageLists = { haptics.tick(); onOpenLists() },
                                 onPlan = { haptics.tick(); onOpenPlan() },
                                 onToggle = { t, checked -> actions.onToggle(t, checked, pageOf(t, today)) },
                                 onOpen = actions.onOpen,
                                 taskAnchor = { id -> Modifier.panelAnchor(anchors, id) },
                                 animatorScale = LocalAnimatorScale.current,
+                                modifier = pageLayer,
+                            )
+                            return@AnimatedContent
+                        }
+                        if (page == Filter.Calendar) {
+                            CalendarPage(
+                                tasks = all,
+                                org = org,
+                                today = today,
+                                zone = zone,
+                                selected = calendarDay?.let(LocalDate::ofEpochDay) ?: today,
+                                onSelect = { calendarDay = it.toEpochDay() },
+                                contentPadding = padding,
+                                themeButton = themeButton,
+                                onToggle = { t, checked -> actions.onToggle(t, checked, pageOf(t, today)) },
+                                onOpen = actions.onOpen,
+                                onMove = { t, day -> vm.moveToDay(t.id, day) },
+                                onAddOn = { day ->
+                                    calendarDay = day.toEpochDay()
+                                    composerPicks = composerPicks.copy(day = day)
+                                    chrome.focusRequest()
+                                },
+                                listState = listStates.getValue(page),
                                 modifier = pageLayer,
                             )
                             return@AnimatedContent
@@ -604,6 +647,7 @@ fun HomeScreen(
 
                 HomeHeader(
                     filter = filter,
+                    lastTodo = lastTodo,
                     onFilter = { chrome.dismiss(); filter = it },
                     onOpenSearch = { openSearch() },
                     searchCircle = Modifier
@@ -646,29 +690,35 @@ fun HomeScreen(
                         optionsAnchor = Modifier.panelAnchor(menuAnchors, MenuIds.ADD_MENU),
                         chrome = chrome,
                         followIme = !searchActive,
-                        // v0.9: the lists button, left of the composer (pairs with the pill when collapsed).
+                        // v0.13: the view switcher, left of the composer (pairs with the pill when collapsed).
                         leading = {
-                            ListsButton(
-                                state = chip,
-                                onClick = openListsPanel,
-                                anchor = Modifier.panelAnchor(menuAnchors, MenuIds.LIST_PICKER),
+                            ViewSwitcherButton(
+                                current = if (filter.isTodoView) filter else lastTodo,
+                                open = switcher.open,
+                                onClick = {
+                                    haptics.tick()
+                                    chrome.dismiss()
+                                    switcher.toggle()
+                                },
+                                modifier = Modifier.onGloballyPositioned { switcherOrigin = it.boundsInRoot() },
                             )
                         },
-                        onSubmit = { parsed ->
-                            // Show the page the new task lands on.
-                            val future = parsed.dueDay != null && parsed.dueDay > today
+                        onSubmit = {},
+                        picksState = composerPicksState,
+                        onSubmitDraft = { draft ->
+                            // Show the page the new task lands on (Home, Calendar and Recurring stay put
+                            // when they still show it).
+                            val future = draft.dueDay != null && draft.dueDay > today
                             val target = if (future) Filter.Upcoming else Filter.Today
-                            // v0.12: Overview stays put (its numbers update); a list chip on the
-                            // target tab sends the task to that list unless it names one.
+                            // v0.12: a list chip on the target tab sends the task to that list unless it names one.
                             val hint = chipFor(target)
-                            if (filter != target && filter != Filter.Overview) filter = target
-                            // "#list" naming a list that is not in view: show it so the new row is seen.
-                            val to = parsed.list
-                            // (A list hidden by the focus mode stays hidden: that was the user's choice.)
-                            if (to != null && selected != null && to.id != selected) vm.selectList(to.id)
+                            val stay = filter == Filter.Overview || filter == Filter.Calendar ||
+                                (filter == Filter.Recurring && draft.repeat != null)
+                            if (filter != target && !stay) filter = target
+                            if (filter == Filter.Calendar && draft.dueDay != null) calendarDay = draft.dueDay.toEpochDay()
                             pendingScroll = !future
-                            vm.add(parsed, listHint = hint)
-                            if (parsed.dueMinute != null) askNotificationsIfNeeded()
+                            vm.add(draft, listHint = hint)
+                            if (draft.dueMinute != null) askNotificationsIfNeeded()
                         },
                     )
                 }
@@ -752,31 +802,11 @@ fun HomeScreen(
             style = HomeTestHooks.menuStyle ?: PanelStyle.Menu,
             bareAnchors = setOf(MenuIds.ADD_MENU),
             ghost = { id ->
-                if (id == MenuIds.LIST_PICKER) ListsButtonContent(chip)
                 if (id == MenuIds.THEME_MENU) ThemeToggleContent(darkNow)
             },
-            above = setOf(MenuIds.LIST_PICKER),
             below = setOf(MenuIds.THEME_MENU),
-            anchorLevels = mapOf(MenuIds.LIST_PICKER to GlassLevel.Mid),
         ) { id ->
             when (id) {
-                MenuIds.LIST_PICKER -> ListsPanelContent(
-                    planLine = planSummary,
-                    lists = lists,
-                    openCounts = openCounts,
-                    selected = selected,
-                    focus = focus,
-                    prefs = focusPrefs,
-                    views = views,
-                    onPlan = { menu = null; onOpenPlan() },
-                    onSelect = { vm.selectList(it); menu = null },
-                    onFocus = { vm.setFocus(it) },
-                    onNewList = { menu = null; onOpenLists() },
-                    onView = { v ->
-                        openSearch(SearchFilter(dev.saikrishna.todo.domain.ViewFilter.decode(v.filter), query = v.query))
-                    },
-                    onSettings = { menu = null; onOpenSettings() },
-                )
                 MenuIds.THEME_MENU -> ThemeMenuContent(
                     current = storedTheme,
                     onSelect = { m -> menu = null; applyTheme(m) },
@@ -794,6 +824,18 @@ fun HomeScreen(
                     onManage = { menu = null; onOpenTemplates() },
                 )
             }
+        }
+
+        // v0.13 view switcher: pills spring up out of the button over a frosted scrim.
+        CompositionLocalProvider(LocalHazeState provides overlayHaze) {
+            ViewSwitcherOverlay(
+                state = switcher,
+                current = filter,
+                counts = pages.counts,
+                origin = switcherOrigin,
+                backdrop = overlayHaze,
+                onPick = { v -> switcher.pick(v, filter)?.let { chrome.dismiss(); filter = it } },
+            )
         }
 
         // v0.11: the search morph over everything (its frost blurs the list content).
@@ -816,6 +858,7 @@ private val SearchHeaderLift = 14.dp
 @Composable
 private fun HomeHeader(
     filter: Filter,
+    lastTodo: Filter,
     onFilter: (Filter) -> Unit,
     onOpenSearch: () -> Unit,
     searchCircle: Modifier,
@@ -825,14 +868,14 @@ private fun HomeHeader(
     Box(modifier.fillMaxWidth()) {
         // Blurred, tinted edge behind the controls, fading out (eased) by 30 dp below them.
         GlassEdgeTop(solidHeight = statusTop + HeaderTop + PillSpec.Height)
-        HeaderControls(filter, onFilter, onOpenSearch, searchCircle)
+        HeaderControls(filter, { onFilter(it.target(lastTodo)) }, onOpenSearch, searchCircle)
     }
 }
 
 @Composable
 private fun HeaderControls(
     filter: Filter,
-    onFilter: (Filter) -> Unit,
+    onSection: (Section) -> Unit,
     onOpenSearch: () -> Unit,
     searchCircle: Modifier,
 ) {
@@ -848,10 +891,10 @@ private fun HeaderControls(
         CircleIconButton(AppIcons.Search, "Search", onOpenSearch, searchCircle, glass = true)
         Box(Modifier.weight(1f).padding(start = 10.dp), contentAlignment = Alignment.Center) {
             SegmentedPill(
-                options = Filter.entries.toList(),
-                selected = filter,
+                options = Section.entries.toList(),
+                selected = filter.section,
                 label = { it.title },
-                onSelect = onFilter,
+                onSelect = onSection,
                 style = PillStyle.Floating,
             )
         }
