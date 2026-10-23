@@ -3,6 +3,10 @@ package dev.saikrishna.todo.ui.home
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
+import dev.saikrishna.todo.ui.icons.AppIcons
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -21,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
@@ -60,7 +65,12 @@ class RowActions(
     val onTag: ((String) -> Unit)? = null,
     /** v0.7.3: a drag to reorder started (true) / stopped (false); the composer never collapses mid-drag. */
     val onDragging: ((Boolean) -> Unit)? = null,
+    /** v0.13 Recurring view: pause / resume / stop a task's repeat. Null hides the controls. */
+    val onRepeat: ((task: Task, action: RepeatAction) -> Unit)? = null,
 )
+
+/** v0.13 Recurring view row controls. */
+enum class RepeatAction { Pause, Resume, Stop }
 
 /**
  * One page of the home list. Stable keys + contentType, every item placed with animateItem
@@ -227,6 +237,9 @@ private fun TaskListRow(
                             onClick = { actions.onOpen(task) },
                             enabled = !busy,
                             onTag = actions.onTag,
+                            trailing = actions.onRepeat?.takeIf { page == Filter.Recurring && !task.done }?.let { act ->
+                                { RepeatControls(paused = task.repeatPaused, title = task.title) { act(task, it) } }
+                            },
                             // The handle sits INSIDE the swipe box, so once a drag starts it consumes
                             // the pointer before the horizontal swipe can claim it.
                             modifier = dragHandle.panelAnchor(actions.anchors, task.id),
@@ -270,4 +283,30 @@ fun NewTaskEntrance(id: Long, tracker: EntranceTracker, content: @Composable (Mo
         }
     }
     content(layer)
+}
+
+/** v0.13: pause/resume + stop, two quiet 36 dp glyph buttons at the end of a Recurring row. */
+@Composable
+private fun RepeatControls(paused: Boolean, title: String, onAction: (RepeatAction) -> Unit) {
+    val c = AppTheme.colors
+    val haptics = LocalHaptics.current
+    androidx.compose.foundation.layout.Row {
+        for (a in listOf(if (paused) RepeatAction.Resume else RepeatAction.Pause, RepeatAction.Stop)) {
+            val label = when (a) { RepeatAction.Pause -> "Pause repeat"; RepeatAction.Resume -> "Resume repeat"; RepeatAction.Stop -> "Stop repeating" }
+            Box(
+                Modifier
+                    .size(36.dp)
+                    .clip(Shapes.full)
+                    .clickable(role = androidx.compose.ui.semantics.Role.Button, onClickLabel = "$label: $title") { haptics.tick(); onAction(a) }
+                    .testTag("repeat-${a.name.lowercase()}"),
+                contentAlignment = androidx.compose.ui.Alignment.Center,
+            ) {
+                androidx.compose.material3.Icon(
+                    when (a) { RepeatAction.Pause -> AppIcons.Pause; RepeatAction.Resume -> AppIcons.Play; RepeatAction.Stop -> AppIcons.Close },
+                    contentDescription = label, tint = if (a == RepeatAction.Stop) c.inkTertiary else c.inkSecondary,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+        }
+    }
 }

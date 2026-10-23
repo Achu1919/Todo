@@ -226,6 +226,20 @@ class TodoViewModel(
         viewModelScope.launch { repository.setRepeat(id, rule) }
     }
 
+    // ---- v0.13 ----
+    fun setRepeatPaused(id: Long, paused: Boolean) = viewModelScope.launch { repository.setRepeatPaused(id, paused) }
+    fun stopRepeat(id: Long) = viewModelScope.launch { repository.stopRepeat(id) }
+    fun moveToDay(id: Long, day: java.time.LocalDate) = viewModelScope.launch { repository.moveToDay(id, day) }
+    fun setRemindBefore(id: Long, minutes: Int) = viewModelScope.launch { repository.setRemindBefore(id, minutes) }
+
+    /** Adds a task from the composer with toolbar picks merged in ([ComposerDraft]). */
+    fun add(draft: dev.saikrishna.todo.domain.ComposerDraft.Draft, listHint: Long? = null) {
+        if (draft.title.isBlank()) return
+        val hinted = listHint?.takeIf { id -> lists.value.any { it.id == id } }
+        val listOk = draft.listId?.takeIf { id -> lists.value.any { it.id == id } }
+        viewModelScope.launch { repository.add(draft.copy(listId = listOk).toNewTask(hinted ?: defaultList())) }
+    }
+
     val askedNotifications: StateFlow<Boolean> = settingsRepository.askedNotifications
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
     fun markAskedNotifications() = viewModelScope.launch { settingsRepository.markAskedNotifications() }

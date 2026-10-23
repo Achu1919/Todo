@@ -44,5 +44,5 @@ fun reorderable(page: Filter, item: ListItem): Boolean = when (page) {
     Filter.Overview -> false
     Filter.Today -> item is ListItem.Row
     Filter.Upcoming -> item is ListItem.Row || item is ListItem.DayHeader
-    Filter.Done -> false
+    Filter.Done, Filter.Recurring, Filter.Calendar -> false
 }

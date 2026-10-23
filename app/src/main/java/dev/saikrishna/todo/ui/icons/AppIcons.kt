@@ -256,4 +256,84 @@ object AppIcons {
             }
         }
     }
+
+    // ---- v0.13 ----
+
+    private fun androidx.compose.ui.graphics.vector.PathBuilder.circle(cx: Float, cy: Float, r: Float) {
+        moveTo(cx + r, cy); arcTo(r, r, 0f, true, true, cx - r, cy); arcTo(r, r, 0f, true, true, cx + r, cy); close()
+    }
+
+    /** Two bars: pause a repeat. */
+    val Pause: ImageVector by lazy {
+        icon("Pause") {
+            stroke(2.2f) { moveTo(9f, 6.5f); lineTo(9f, 17.5f) }
+            stroke(2.2f) { moveTo(15f, 6.5f); lineTo(15f, 17.5f) }
+        }
+    }
+
+    /** Rounded triangle: resume a repeat. */
+    val Play: ImageVector by lazy {
+        icon("Play") { stroke(2f) { moveTo(8.5f, 6f); lineTo(18f, 12f); lineTo(8.5f, 18f); close() } }
+    }
+
+    /** Settings gear: a ring with six short teeth. */
+    val Gear: ImageVector by lazy {
+        icon("Gear") {
+            stroke(1.9f) { circle(12f, 12f, 3f) }
+            stroke(1.9f) { circle(12f, 12f, 6.5f) }
+            for (k in 0 until 6) {
+                val a = Math.toRadians(k * 60.0 + 30.0)
+                val c = kotlin.math.cos(a).toFloat(); val sn = kotlin.math.sin(a).toFloat()
+                stroke(2.6f) { moveTo(12f + 7.2f * c, 12f + 7.2f * sn); lineTo(12f + 9f * c, 12f + 9f * sn) }
+            }
+        }
+    }
+
+    /** Bell: reminders. */
+    val Bell: ImageVector by lazy {
+        icon("Bell") {
+            stroke(1.9f) {
+                moveTo(6f, 16.5f); lineTo(6f, 11f)
+                curveTo(6f, 7.5f, 8.7f, 5f, 12f, 5f); curveTo(15.3f, 5f, 18f, 7.5f, 18f, 11f)
+                lineTo(18f, 16.5f); lineTo(19.5f, 18f); lineTo(4.5f, 18f); close()
+            }
+            stroke(1.9f) { moveTo(10.2f, 20.5f); lineTo(13.8f, 20.5f) }
+        }
+    }
+
+    /** A page with two lines: notes. */
+    val Note: ImageVector by lazy {
+        icon("Note") {
+            stroke(1.9f) { moveTo(6f, 4.5f); lineTo(18f, 4.5f); lineTo(18f, 19.5f); lineTo(6f, 19.5f); close() }
+            stroke(1.9f) { moveTo(9f, 9.5f); lineTo(15f, 9.5f) }
+            stroke(1.9f) { moveTo(9f, 13.5f); lineTo(13f, 13.5f) }
+        }
+    }
+
+    /** House outline: the Home page. */
+    val Home: ImageVector by lazy {
+        icon("Home") {
+            stroke(1.9f) { moveTo(4.5f, 11f); lineTo(12f, 4.5f); lineTo(19.5f, 11f) }
+            stroke(1.9f) { moveTo(6.5f, 9.5f); lineTo(6.5f, 19.5f); lineTo(17.5f, 19.5f); lineTo(17.5f, 9.5f) }
+        }
+    }
+
+    /** Circle with a tick: the Done view. */
+    val CheckCircle: ImageVector by lazy {
+        icon("CheckCircle") {
+            stroke(1.9f) { circle(12f, 12f, 8f) }
+            stroke(2f) { moveTo(8.5f, 12.2f); lineTo(11f, 14.6f); lineTo(15.6f, 9.6f) }
+        }
+    }
+
+    /** Calendar page with an arrow: the Upcoming view. */
+    val Upcoming: ImageVector by lazy {
+        icon("Upcoming") {
+            stroke(1.9f) { moveTo(4.5f, 6f); lineTo(19.5f, 6f); lineTo(19.5f, 19.5f); lineTo(4.5f, 19.5f); close() }
+            stroke(1.9f) { moveTo(8f, 3.5f); lineTo(8f, 7.5f) }
+            stroke(1.9f) { moveTo(16f, 3.5f); lineTo(16f, 7.5f) }
+            stroke(1.9f) { moveTo(9f, 13f); lineTo(15f, 13f) }
+            stroke(1.9f) { moveTo(12.5f, 10.5f); lineTo(15f, 13f); lineTo(12.5f, 15.5f) }
+        }
+    }
 }

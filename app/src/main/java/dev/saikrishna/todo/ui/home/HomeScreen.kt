@@ -867,6 +867,8 @@ private fun headingFor(page: Filter, today: LocalDate): String = when (page) {
     Filter.Today -> today.format(HeadingDate.withLocale(java.util.Locale.getDefault()))
     Filter.Upcoming -> "Coming up"
     Filter.Done -> "Done"
+    Filter.Recurring -> "Recurring"
+    Filter.Calendar -> "Calendar"
 }
 
 private fun captionFor(page: Filter, pages: Pages, shown: List<ListItem>, chip: Boolean): String? {
@@ -879,6 +881,8 @@ private fun captionFor(page: Filter, pages: Pages, shown: List<ListItem>, chip: 
         }
         Filter.Upcoming -> if (rows == 0) null else if (rows == 1) "1 planned" else "$rows planned"
         Filter.Done -> null // the "Clear done" row already shows the count
+        Filter.Recurring -> if (rows == 0) null else if (rows == 1) "1 repeating" else "$rows repeating"
+        Filter.Calendar -> null
     }
 }
 

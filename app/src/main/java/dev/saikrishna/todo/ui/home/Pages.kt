@@ -8,14 +8,40 @@ import dev.saikrishna.todo.data.TaskList
 import dev.saikrishna.todo.data.tagList
 import dev.saikrishna.todo.data.priority
 import dev.saikrishna.todo.domain.QuickParse
+import dev.saikrishna.todo.domain.RepeatRule
+import dev.saikrishna.todo.domain.group
+import dev.saikrishna.todo.domain.label
+import dev.saikrishna.todo.data.repeat
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-/** The pages behind the filter pill (spec 6.2; v0.12 adds Overview first). Order = slide direction. */
-enum class Filter(val title: String) { Overview("Overview"), Today("Today"), Upcoming("Upcoming"), Done("Done") }
+/**
+ * The pages (order = slide direction). v0.13: the header pill shows Home · Todo · Calendar
+ * ([Section]); Today / Upcoming / Recurring / Done are the Todo views picked with the bottom-left
+ * switcher ([TodoViews]). Overview is the Home page.
+ */
+enum class Filter(val title: String) {
+    Overview("Home"), Today("Today"), Upcoming("Upcoming"), Recurring("Recurring"), Done("Done"), Calendar("Calendar");
+
+    val section: Section get() = when (this) { Overview -> Section.Home; Calendar -> Section.Calendar; else -> Section.Todo }
+    val isTodoView: Boolean get() = section == Section.Todo
+}
+
+/** v0.13 header pill. */
+enum class Section(val title: String) { Home("Home"), Todo("Todo"), Calendar("Calendar") }
+
+/** The four Todo views, in switcher order (bottom to top). */
+val TodoViews = listOf(Filter.Today, Filter.Upcoming, Filter.Recurring, Filter.Done)
+
+/** Which page a header tap goes to: Todo returns to the last Todo view. */
+fun Section.target(lastTodo: Filter): Filter = when (this) {
+    Section.Home -> Filter.Overview
+    Section.Calendar -> Filter.Calendar
+    Section.Todo -> lastTodo.takeIf { it.isTodoView } ?: Filter.Today
+}
 
 /** A row that changed state stays on its old page for a dwell, then collapses out (6.5, 6.9). */
 enum class LeavePhase { Dwell, Collapsing }
@@ -39,9 +65,12 @@ data class RowMeta(
     val listColor: Int = 0,
     /** v0.12: list colour index for the row's accent bar and checkbox ring (null = one list only). */
     val accent: Int? = null,
+    /** v0.13 Recurring view: the rule ("Every Monday") and whether it is paused. */
+    val repeatLabel: String? = null,
+    val paused: Boolean = false,
 ) {
     val isEmpty: Boolean get() = dueLabel == null && priority == Priority.None && !hasNotes && !repeats &&
-        tags.isEmpty() && progress == null && listName == null
+        tags.isEmpty() && progress == null && listName == null && repeatLabel == null
 }
 
 /**
@@ -104,11 +133,16 @@ data class Pages(
     val done: List<ListItem>,
     val openToday: Int,
     val doneCount: Int,
+    /** v0.13: open repeating tasks grouped Daily / Weekly / Monthly / Yearly. */
+    val recurring: List<ListItem> = emptyList(),
+    /** v0.13 switcher counts: open rows per Todo view (Done: completed). */
+    val counts: Map<Filter, Int> = emptyMap(),
 ) {
     operator fun get(filter: Filter): List<ListItem> = when (filter) {
-        Filter.Overview -> emptyList()
+        Filter.Overview, Filter.Calendar -> emptyList()
         Filter.Today -> today
         Filter.Upcoming -> upcoming
+        Filter.Recurring -> recurring
         Filter.Done -> done
     }
 }
@@ -178,7 +212,7 @@ fun buildPages(
     val upcomingTasks = ArrayList<Task>()
     val doneTasks = ArrayList<Task>()
     for (t in tasks) when (page(t)) {
-        Filter.Overview -> Unit // never a task's page
+        Filter.Overview, Filter.Recurring, Filter.Calendar -> Unit // never a task's natural page
         Filter.Today -> todayTasks += t
         Filter.Upcoming -> upcomingTasks += t
         Filter.Done -> doneTasks += t
@@ -220,12 +254,62 @@ fun buildPages(
         }
     if (doneItems.isEmpty()) doneItems += ListItem.Empty("Nothing done yet.", "Completed tasks collect here.")
 
+    val recurringItems = buildRecurring(tasks, today, locale, org)
+    val openToday = tasks.count { !it.done && pageOf(it, today) == Filter.Today }
+    val doneCount = tasks.count { it.done && leaving[it.id]?.phase != LeavePhase.Dwell }
     return Pages(
         today = todayItems,
         upcoming = upcomingItems,
         done = doneItems,
-        openToday = tasks.count { !it.done && pageOf(it, today) == Filter.Today },
-        doneCount = tasks.count { it.done && leaving[it.id]?.phase != LeavePhase.Dwell },
+        openToday = openToday,
+        doneCount = doneCount,
+        recurring = recurringItems,
+        counts = mapOf(
+            Filter.Today to openToday,
+            Filter.Upcoming to upcomingTasks.count { !it.done },
+            Filter.Recurring to recurringItems.count { it is ListItem.Row },
+            Filter.Done to doneCount,
+        ),
+    )
+}
+
+/**
+ * v0.13 Recurring view: open tasks with a repeat rule (paused ones too), grouped by
+ * [RepeatGroup] (custom rules go to the nearest group), each group by next date then time.
+ * Group headers reuse [ListItem.DayHeader] with negative keys (-1 Daily … -4 Yearly).
+ */
+fun buildRecurring(tasks: List<Task>, today: LocalDate, locale: Locale = Locale.getDefault(), org: OrgView = OrgView()): List<ListItem> {
+    val out = ArrayList<ListItem>()
+    tasks.asSequence()
+        .filter { !it.done && org.shows(it) }
+        .mapNotNull { t -> t.repeat?.let { t to it } }
+        .groupBy { it.second.group() }
+        .toSortedMap()
+        .forEach { (group, list) ->
+            out += ListItem.DayHeader(-(group.ordinal + 1L), group.title)
+            list.sortedWith(compareBy<Pair<Task, RepeatRule>>({ it.first.dueDay ?: Long.MAX_VALUE }, { it.first.dueMinute ?: Int.MAX_VALUE }, { it.first.id }))
+                .forEach { (t, rule) -> out += ListItem.Row(t, recurringMeta(t, rule, today, locale, org)) }
+        }
+    if (out.isEmpty()) out += ListItem.Empty("Nothing repeats yet.", "Type \"every Monday\" or pick Repeat when adding a task.")
+    return out
+}
+
+fun recurringMeta(t: Task, rule: RepeatRule, today: LocalDate, locale: Locale = Locale.getDefault(), org: OrgView? = null): RowMeta {
+    val base = rowMeta(t, today, showDue = false, locale, org)
+    val due = t.dueDay?.let(LocalDate::ofEpochDay)
+    val time = t.dueMinute?.takeIf { due != null }?.let(QuickParse::timeLabel)
+    val next = when {
+        t.repeatPaused -> "Paused"
+        due == null -> null
+        due.isBefore(today) -> "Overdue · ${dayLabel(due, today, locale)}"
+        else -> "Next · ${dayLabel(due, today, locale)}"
+    }
+    return base.copy(
+        dueLabel = listOfNotNull(next, time.takeIf { !t.repeatPaused }).joinToString(" · ").ifEmpty { null },
+        overdue = !t.repeatPaused && due != null && due.isBefore(today),
+        repeats = false,
+        repeatLabel = rule.label(),
+        paused = t.repeatPaused,
     )
 }
 

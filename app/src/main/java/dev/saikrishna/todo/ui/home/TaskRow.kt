@@ -56,6 +56,8 @@ fun TaskRow(
     enabled: Boolean = true,
     /** v0.7: tapping a tag pill (opens Search filtered by it). */
     onTag: ((String) -> Unit)? = null,
+    /** v0.13: end-of-row controls (the Recurring view's pause / stop). */
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     val c = AppTheme.colors
     val checked = task.done
@@ -117,6 +119,9 @@ fun TaskRow(
                 MetaLine(meta, Modifier.padding(top = 2.dp).graphicsLayer { alpha = metaAlpha.value }, onTag = onTag)
             }
         }
+        if (trailing != null) {
+            Box(Modifier.align(Alignment.CenterVertically).padding(start = 4.dp)) { trailing() }
+        }
     }
 }
 
@@ -126,7 +131,18 @@ internal fun MetaLine(meta: RowMeta, modifier: Modifier = Modifier, onTag: ((Str
     val style = AppTheme.type.meta
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         var needsSep = false
+        if (meta.repeatLabel != null) {
+            // v0.13 Recurring view: the rule leads the line (dimmed while paused).
+            androidx.compose.material3.Icon(
+                if (meta.paused) dev.saikrishna.todo.ui.icons.AppIcons.Pause else dev.saikrishna.todo.ui.icons.AppIcons.Repeat,
+                contentDescription = null, tint = c.inkSecondary, modifier = Modifier.size(12.dp),
+            )
+            Spacer(Modifier.width(4.dp))
+            BasicText(meta.repeatLabel, style = style, color = { if (meta.paused) c.inkTertiary else c.inkSecondary }, maxLines = 1)
+            needsSep = true
+        }
         if (meta.listName != null) {
+            if (needsSep) BasicText(" · ", style = style, color = { c.inkTertiary })
             ListDot(c.listColor(meta.listColor))
             Spacer(Modifier.width(5.dp))
             BasicText(meta.listName, style = style, color = { c.inkSecondary }, maxLines = 1)
