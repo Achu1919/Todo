@@ -1159,3 +1159,17 @@ Milestone 4: the reference recordings Sai provided were used only to measure pro
   before saving. New `HomeTabsTest` (normal suite): enum order, a 4x4 from→to tab matrix, the shot's
   chip→Upcoming→Done sequence plus the Work chip on Done. It failed with the old settle and passes now.
 - No new APK (v0.12.0 stands).
+
+## Milestone 12.1 — polish pass (v0.12.1, versionCode 22)
+Sai's on-device feedback plus a screen-by-screen audit (light/dark × font 1.0/1.3, 412×915 dp; `V121PolishScreenshotTest`, 48 shots).
+- Task rows: the list-colour stripe on the left is gone everywhere. The tinted check ring and the list dot + name stay.
+- Selected/filled controls are clean solid fills. The glass rim (the thin white line inside the top edge) fades out on a selected list chip, and the undo bar no longer draws one. Tabs, the panel segments, "Plan your day" and the selected time/date chips were already rim-free (checked in zooms).
+- Bottom fade: nothing of the list shows below the composer pill. `bottomFade(clearBelow)` clears to 0 under ime ∪ nav inset + 10 dp. `BottomFadeTest.nothingBelowThePill`.
+- Composer hint: the examples are ≤ 19 chars ("Call mom 6pm", "Rent monthly on 1st", "Milk #personal", "Deck Friday !high", "Water plants daily"), all still parsed (`ComposerHintTest`). A phrase that doesn't fit the measured width is skipped, never ellipsized.
+- Font 1.3:
+  - Header tabs: labels shrink together to fit instead of "Upco…".
+  - Overview stat-tile labels step down to 9 sp before ellipsizing.
+  - Task-panel actions never clip ("Mark …"/"Templat" was clipping even at 1.0). The three icons drop together when the labels need the room, then the labels step down to 75 %.
+- Plan your day: the swipe hint only sits on the front card. It used to peek out under the stacked cards.
+- Not done (recommendations): the lists-button repurpose (planned as the v0.13 view switcher); a scroll edge-fade on the panel's Due/Time chip rows; Robolectric shots don't show real nav-bar insets (verify the bottom fade on device).
+- Sheet: `out/shots/v0121-polish.png` (`scripts/v0121_sheets.py`; before = `out/shots/v0121-before/`). Full suite: 59 classes, 415 tests, 0 failures. Release 5.9 MB, aapt 22/0.12.1, verify_release OK.
