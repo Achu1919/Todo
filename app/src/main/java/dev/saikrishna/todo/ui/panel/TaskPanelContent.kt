@@ -1,10 +1,8 @@
 package dev.saikrishna.todo.ui.panel
 
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.background
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -34,6 +32,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -206,13 +207,27 @@ fun TaskPanelContent(
             )
 
             Spacer(Modifier.height(16.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            // v0.12.1: the three actions keep their icons together or drop them together.
+            val actionMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
+            val actionStyle = AppTheme.type.label
+            var actionsRowW by remember { mutableIntStateOf(0) }
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            val actionTexts = listOfNotNull(if (task.done) "Mark not done" else "Mark done", if (onSaveAsTemplate != null) "Template" else null, "Delete")
+            val actionIcons = actionsRowW == 0 || with(density) {
+                val per = (actionsRowW - (actionTexts.size - 1) * 10.dp.toPx()) / actionTexts.size - 2 * 10.dp.toPx()
+                actionTexts.all { actionMeasurer.measure(it, actionStyle, maxLines = 1, softWrap = false).size.width + 24.dp.toPx() <= per }
+            }
+            Row(
+                Modifier.fillMaxWidth().onSizeChanged { actionsRowW = it.width },
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 PanelAction(
                     text = if (task.done) "Mark not done" else "Mark done",
                     color = c.ink,
                     icon = { Icon(AppIcons.Check, null, tint = c.ink, modifier = Modifier.size(18.dp)) },
                     onClick = { onToggleDone(!task.done) },
                     modifier = Modifier.weight(1f),
+                    showIcon = actionIcons,
                 )
                 if (onSaveAsTemplate != null) {
                     var saved by remember(task.id) { mutableStateOf(false) }
@@ -223,6 +238,7 @@ fun TaskPanelContent(
                         onClick = { if (!saved) { haptics.tick(); onSaveAsTemplate(); saved = true } },
                         modifier = Modifier.weight(1f),
                         label = "Save as template",
+                        showIcon = actionIcons,
                     )
                 }
                 PanelAction(
@@ -232,6 +248,7 @@ fun TaskPanelContent(
                     onClick = onDelete,
                     modifier = Modifier.weight(1f),
                     label = "Delete task",
+                    showIcon = actionIcons,
                 )
             }
         }
@@ -264,6 +281,7 @@ internal fun PanelAction(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     label: String = text,
+    showIcon: Boolean? = null,
 ) {
     Row(
         modifier
@@ -271,19 +289,41 @@ internal fun PanelAction(
             .glassControl(Shapes.full)
             .clip(Shapes.full)
             .clickable(role = Role.Button, onClickLabel = label, onClick = onClick)
-            .padding(horizontal = 14.dp),
+            .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
-        icon()
-        Spacer(Modifier.width(8.dp))
-        // v0.12.1: at large font scales the label shrinks a step (down to 75 %) rather than clipping.
+        // v0.12.1: at large font scales a label that doesn't fit drops its icon first, then steps
+        // its size down (to 75 %), then ellipsizes; it never hard-clips ("Mark …", "Templ…").
         val st = AppTheme.type.label
-        BasicText(
-            text, style = st.copy(color = color), maxLines = 1, softWrap = false,
-            overflow = TextOverflow.Ellipsis,
-            autoSize = TextAutoSize.StepBased(minFontSize = st.fontSize * 0.75f, maxFontSize = st.fontSize, stepSize = 0.5.sp),
-        )
+        val gap = 6.dp
+        val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+        val textFull = remember(text, st) { measurer.measure(text, st, maxLines = 1, softWrap = false).size.width }
+        androidx.compose.ui.layout.Layout(
+            content = {
+                icon()
+                androidx.compose.foundation.text.BasicText(
+                    text, style = st.copy(color = color), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(
+                        minFontSize = st.fontSize * 0.75f, maxFontSize = st.fontSize, stepSize = 0.5.sp,
+                    ),
+                )
+            },
+        ) { ms, cons ->
+            val loose = cons.copy(minWidth = 0)
+            val iconP = ms[0].measure(loose)
+            val g = gap.roundToPx()
+            val withIcon = showIcon ?: (cons.maxWidth == androidx.compose.ui.unit.Constraints.Infinity ||
+                iconP.width + g + textFull <= cons.maxWidth)
+            val textP = ms[1].measure(loose.copy(maxWidth = if (withIcon) (cons.maxWidth - iconP.width - g).coerceAtLeast(0) else cons.maxWidth))
+            val w = if (withIcon) iconP.width + g + textP.width else textP.width
+            val h = maxOf(if (withIcon) iconP.height else 0, textP.height)
+            layout(w.coerceIn(cons.minWidth, cons.maxWidth), h.coerceIn(cons.minHeight, cons.maxHeight)) {
+                var x = 0
+                if (withIcon) { iconP.place(0, (h - iconP.height) / 2); x = iconP.width + g }
+                textP.place(x, (h - textP.height) / 2)
+            }
+        }
     }
 }
 

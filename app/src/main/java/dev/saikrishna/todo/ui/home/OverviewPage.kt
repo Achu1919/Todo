@@ -308,8 +308,7 @@ private fun StatTile(value: String, label: String, color: Color, modifier: Modif
             Text(value, style = AppTheme.type.title.copy(fontSize = 26.sp, fontWeight = FontWeight.SemiBold), color = c.ink, maxLines = 1)
             // v0.12.1: shrink a little at font scale 1.3 ("Upco…" before), then ellipsize.
             BasicText(
-                label, style = AppTheme.type.meta.copy(fontSize = 12.sp, color = c.inkSecondary), maxLines = 1, softWrap = false,
-                overflow = TextOverflow.Ellipsis,
+                label, style = AppTheme.type.meta.copy(fontSize = 12.sp, color = c.inkSecondary), maxLines = 1,
                 autoSize = TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = 12.sp, stepSize = 0.5.sp),
             )
         }
