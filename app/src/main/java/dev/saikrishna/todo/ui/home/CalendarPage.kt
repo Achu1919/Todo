@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -75,6 +76,7 @@ import dev.saikrishna.todo.ui.motion.LocalReducedMotion
 import dev.saikrishna.todo.ui.motion.SpringToken
 import dev.saikrishna.todo.ui.theme.AppTheme
 import dev.saikrishna.todo.ui.theme.Shapes
+import dev.saikrishna.todo.ui.theme.Spacing
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -280,6 +282,10 @@ fun CalendarPage(
                 Column(
                     Modifier
                         .fillMaxWidth()
+                        // Measure every row at full height even when the clip box is one row tall:
+                        // under the box's bounded height, rows below the first were squeezed to 0 dp,
+                        // so the collapsed strip (which shows the selected row, shifted up) was empty.
+                        .wrapContentHeight(Alignment.Top, unbounded = true)
                         .padding(horizontal = 12.dp)
                         .graphicsLayer {
                             translationY = yShift
@@ -369,7 +375,8 @@ fun CalendarPage(
                     var rowRoot by remember { mutableStateOf(Offset.Zero) }
                     Box(
                         Modifier
-                            .padding(horizontal = 8.dp)
+                            // v0.13.1: same gutter and row gap as the Todo lists (was 8 dp, no gap).
+                            .padding(start = Spacing.screen, end = Spacing.screen, bottom = Spacing.rowGap)
                             .graphicsLayer { alpha = if (e.projected) CalendarSpec.ProjectedAlpha else if (ui.dragTask?.id == e.task.id) 0.3f else 1f }
                             .onGloballyPositioned { rowRoot = it.positionInRoot() }
                             .then(
@@ -499,7 +506,7 @@ private fun DayCell(
                 )
             }
         }
-        Row(Modifier.height(8.dp).padding(top = 3.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+        Row(Modifier.height(8.dp).padding(top = 3.dp).testTag("cal-dots-${date}"), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             for (id in info?.dotLists.orEmpty()) {
                 val colour = org.lists[id]?.let { c.listColor(it.color) } ?: c.inkTertiary
                 Box(Modifier.size(CalendarSpec.CellDot).clip(Shapes.full).background(colour))

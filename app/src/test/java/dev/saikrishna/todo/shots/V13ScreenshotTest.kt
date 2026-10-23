@@ -187,7 +187,10 @@ class V13ScreenshotTest(private val dark: Boolean) {
     @Test fun calendar() {
         home()
         NavTest.section(rule, Section.Calendar) { settle() }
+        root(); settle(300) // second capture: see calendar-day
         save("calendar-week")
+        // An empty week strip (v0.13.0 bug) fails the shot.
+        dev.saikrishna.todo.ui.home.WeekStripCheck.assertDrawn(rule, today, withDots = setOf(today))
         strip("calendar-pull", record(15, 32) { click("calendar-handle") }, 32)
         settle()
         save("calendar-month")
