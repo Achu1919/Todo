@@ -8,6 +8,7 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.glance.appwidget.testing.unit.runGlanceAppWidgetUnitTest
 import androidx.glance.testing.unit.hasContentDescription
+import androidx.glance.testing.unit.hasContentDescriptionEqualTo
 import androidx.glance.testing.unit.hasText
 import androidx.test.core.app.ApplicationProvider
 import dev.saikrishna.todo.data.Task
@@ -82,32 +83,32 @@ class QuickWidgetsTest {
         setAppWidgetSize(DpSize(250.dp, 56.dp)); setContext(ctx)
         provideComposable { AddPillContent(ctx) }
         onNode(hasText("Add a task")).assertExists()
-        onNode(hasContentDescription("Add a task")).assertExists()
-        onNode(hasContentDescription("Add a task by voice")).assertExists()
+        onNode(hasContentDescriptionEqualTo("Add a task")).assertExists()
+        onNode(hasContentDescriptionEqualTo("Add a task by voice")).assertExists()
     }
 
     @Test fun narrowPillDropsTheMic() = runGlanceAppWidgetUnitTest {
         setAppWidgetSize(DpSize(120.dp, 56.dp)); setContext(ctx)
         provideComposable { AddPillContent(ctx) }
         onNode(hasText("Add a task")).assertExists()
-        onNode(hasContentDescription("Add a task by voice")).assertDoesNotExist()
+        onNode(hasContentDescriptionEqualTo("Add a task by voice")).assertDoesNotExist()
     }
 
     @Test fun roundTree() = runGlanceAppWidgetUnitTest {
         setAppWidgetSize(DpSize(64.dp, 64.dp)); setContext(ctx)
         provideComposable { AddRoundContent(ctx) }
-        onNode(hasContentDescription("Add a task")).assertExists()
+        onNode(hasContentDescriptionEqualTo("Add a task")).assertExists()
     }
 
     @Test fun quickListsTree() = runGlanceAppWidgetUnitTest {
         setAppWidgetSize(DpSize(400.dp, 64.dp)); setContext(ctx)
         val d = QuickData.build(emptyList(), lists, today)
         provideComposable { QuickListsContent(ctx, d) }
-        onNode(hasContentDescription("Add a task")).assertExists()
-        onNode(hasContentDescription("Add a task for today")).assertExists()
-        onNode(hasContentDescription("Add a task to Work")).assertExists()
-        onNode(hasContentDescription("Add a task to Personal")).assertExists()
-        onNode(hasContentDescription("Add a task by voice")).assertExists()
+        onNode(hasContentDescriptionEqualTo("Add a task")).assertExists()
+        onNode(hasContentDescriptionEqualTo("Add a task for today")).assertExists()
+        onNode(hasContentDescriptionEqualTo("Add a task to Work")).assertExists()
+        onNode(hasContentDescriptionEqualTo("Add a task to Personal")).assertExists()
+        onNode(hasContentDescriptionEqualTo("Add a task by voice")).assertExists()
         onNode(hasText("Today")).assertExists()
     }
 
@@ -119,8 +120,8 @@ class QuickWidgetsTest {
         onNode(hasText("Add a task")).assertExists()
         onNode(hasText("Voice")).assertExists()
         onNode(hasText("Plan")).assertExists()
-        onNode(hasContentDescription("Plan your day")).assertExists()
-        onNode(hasContentDescription("Add a task by voice")).assertExists()
+        onNode(hasContentDescriptionEqualTo("Plan your day")).assertExists()
+        onNode(hasContentDescriptionEqualTo("Add a task by voice")).assertExists()
         onNode(hasText("What's next?")).assertDoesNotExist()
     }
 

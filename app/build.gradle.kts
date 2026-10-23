@@ -144,3 +144,14 @@ val copyReleaseApk = tasks.register<Copy>("copyReleaseApk") {
     rename { "todo-release.apk" }
 }
 tasks.matching { it.name == "assembleRelease" }.configureEach { finalizedBy(copyReleaseApk) }
+
+// v0.12: out/ is gitignored, and on Oct 23 2026 a workspace restore dropped every gitignored path
+// (out/, build/, .gradle/) while keeping tracked files and ../*.apk. No Gradle task deletes
+// out/ (the Copy tasks above only add files; `clean` only removes app/build), but mirror it to
+// ../todo-artifacts/out after each test run / APK copy so shots and APKs have a second home.
+// Copy (not Sync): the mirror never deletes anything.
+val mirrorOut = tasks.register<Copy>("mirrorOut") {
+    from(rootProject.layout.projectDirectory.dir("out"))
+    into(File(rootProject.projectDir.parentFile, "todo-artifacts/out"))
+}
+tasks.matching { it.name in setOf("testDebugUnitTest", "copyDebugApk", "copyReleaseApk") }.configureEach { finalizedBy(mirrorOut) }
