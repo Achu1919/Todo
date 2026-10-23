@@ -143,7 +143,13 @@ class V12ScreenshotTest {
     private fun role(r: Role) = SemanticsMatcher.expectValue(SemanticsProperties.Role, r)
     private fun tab(name: String) = rule.onNode(hasText(name) and role(Role.Tab)).performSemanticsAction(SemanticsActions.OnClick)
     private fun chip(name: String) = rule.onNode(hasText(name) and role(Role.RadioButton)).performSemanticsAction(SemanticsActions.OnClick)
-    private fun settle(ms: Long = 1_200) { rule.mainClock.advanceTimeBy(ms); rule.waitForIdle() }
+    // Idle first, then frame-sized steps: one big advanceTimeBy() right after a semantics click
+    // ran before the click was applied, so v0.12.0's "Done" shot showed Upcoming (see HomeTabsTest).
+    private fun settle(ms: Long = 1_200) {
+        rule.waitForIdle()
+        repeat((ms / 100).toInt()) { rule.mainClock.advanceTimeBy(100); rule.waitForIdle() }
+    }
+    private fun onTab(name: String) = rule.onNode(hasText(name) and role(Role.Tab)).assertIsSelected()
 
     private fun record(n: Int, stepMs: Long, action: () -> Unit): List<Bitmap> {
         val out = ArrayList<Bitmap>()
@@ -175,7 +181,7 @@ class V12ScreenshotTest {
         save("v012-today-${mode(dark)}", root())
         val frames = record(14, 32) { tab("Overview") }
         strip("v012-tab-overview-filmstrip-${mode(dark)}", frames, 32)
-        settle()
+        settle(); onTab("Overview")
         save("v012-overview-${mode(dark)}", root())
     }
 
@@ -196,10 +202,10 @@ class V12ScreenshotTest {
         strip("v012-chip-filter-filmstrip-${mode(dark)}", frames, 32)
         settle()
         save("v012-chips-work-${mode(dark)}", root())
-        tab("Upcoming"); settle(); settle()
-        rule.onNode(hasText("Upcoming") and role(Role.Tab)).assertIsSelected()
+        onTab("Today")
+        tab("Upcoming"); settle(); onTab("Upcoming")
         save("v012-chips-upcoming-${mode(dark)}", root())
-        tab("Done"); settle()
+        tab("Done"); settle(); onTab("Done")
         save("v012-chips-done-${mode(dark)}", root())
     }
 

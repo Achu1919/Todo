@@ -1148,3 +1148,14 @@ It returns an **android.graphics.Path** (not a Compose Path): use `.asComposePat
 
 No third-party code, shaders, fonts, assets, logos or palette were used. Only the motion spec's numbers/techniques; palette, icons and launcher mark are our own; fonts are OFL.
 Milestone 4: the reference recordings Sai provided were used only to measure proportions, alphas and tonality. No frames from them are in the repo or shipped in the APK. Every colour value is our own pick, close in feel but not the same hex. No third-party fonts, drawables, shaders or logos are used. The serif is Newsreader (OFL) and the sans is Inter (OFL).
+
+### 12.0 follow-up: categories sheet "Done" panel showed Upcoming
+- Cause: screenshot harness only. With `mainClock.autoAdvance = false`, a single `advanceTimeBy(1200)` straight after a
+  semantics click ran before the click's snapshot change was applied, so each shot lagged one tab behind
+  (Done showed Upcoming; earlier the Upcoming shot had shown Today). App code is fine: tabs are the `Filter` enum
+  everywhere (pill, rememberSaveable, Open-app-on, Overview tiles); no int page indices, no tab swipe, and
+  notification/widget intents carry task/plan ids, not pages.
+- Fix: `settle()` idles first, then advances in 100 ms steps; the categories/overview shots assert the selected tab
+  before saving. New `HomeTabsTest` (normal suite): enum order, a 4x4 from→to tab matrix, the shot's
+  chip→Upcoming→Done sequence plus the Work chip on Done. It failed with the old settle and passes now.
+- No new APK (v0.12.0 stands).
