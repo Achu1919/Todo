@@ -84,12 +84,15 @@ private fun ListChip(option: ChipOption, selected: Boolean, onClick: () -> Unit)
     val rim by animateStateColor(selected, rimOn, rimOn.copy(alpha = 0f), Tweens.select(), label = "chip rim")
     val text by animateStateColor(selected && list == null, c.onInk, c.ink, Tweens.select(), label = "chip text")
     val count by animateStateColor(selected && list == null, c.onInk.copy(alpha = 0.7f), c.inkTertiary, Tweens.select(), label = "chip count")
+    // v0.12.1: the glass rim is drawn over content, so it fades out as the chip fills: a selected
+    // chip is a clean solid fill (no light line inside its top edge), light and dark.
+    val rimOff by androidx.compose.animation.core.animateFloatAsState(if (selected) 0f else 1f, Tweens.select(), label = "chip glass rim")
     val press = remember { MutableInteractionSource() }
     Row(
         Modifier
             .height(PillSpec.ChipHeight)
             .pressScale(press, 0.95f)
-            .glassControl(Shapes.full)
+            .glassControl(Shapes.full, rimAlpha = { rimOff })
             .drawBehind {
                 val r = CornerRadius(size.height / 2f)
                 drawRoundRect(fill, cornerRadius = r)

@@ -1,7 +1,6 @@
 package dev.saikrishna.todo.ui.home
 
 import dev.saikrishna.todo.ui.components.GlassLevel
-import dev.saikrishna.todo.ui.components.glassRim
 import dev.saikrishna.todo.ui.components.glassShadow
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -196,8 +195,7 @@ fun UndoBar(event: UndoEvent?, onUndo: (UndoEvent) -> Unit, onTimeout: (UndoEven
                 .heightIn(min = PillSpec.Height)
                 .glassShadow(Shapes.full, GlassLevel.Mid, c.glassShadow)
                 .clip(Shapes.full)
-                .background(c.ink)
-                .glassRim(Shapes.full, c.onInk.copy(alpha = 0.22f), c.onInk.copy(alpha = 0.04f))
+                .background(c.ink) // v0.12.1: solid ink, no inner rim line
                 .semantics { liveRegion = LiveRegionMode.Polite }
                 .padding(start = 20.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,

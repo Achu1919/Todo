@@ -350,9 +350,10 @@ fun Modifier.liftShadow(shape: Shape, color: Color, lift: () -> Float): Modifier
 
 /**
  * 1 dp glass rim: lighter at the top, slightly darker at the bottom. Drawn over the content,
- * inset half a stroke so it stays inside the surface.
+ * inset half a stroke so it stays inside the surface. [alpha] is read in draw: v0.12.1 filled
+ * (selected) controls pass 0 so a solid fill never shows a light line inside its top edge.
  */
-fun Modifier.glassRim(shape: Shape, top: Color, bottom: Color, width: Dp = 1.dp): Modifier = drawWithCache {
+fun Modifier.glassRim(shape: Shape, top: Color, bottom: Color, width: Dp = 1.dp, alpha: () -> Float = { 1f }): Modifier = drawWithCache {
     val w = width.toPx()
     val path = Path().apply {
         addOutline(shape.createOutline(Size(size.width - w, size.height - w), layoutDirection, this@drawWithCache))
@@ -360,7 +361,8 @@ fun Modifier.glassRim(shape: Shape, top: Color, bottom: Color, width: Dp = 1.dp)
     val brush = Brush.verticalGradient(listOf(top, bottom), startY = 0f, endY = size.height)
     onDrawWithContent {
         drawContent()
-        translate(w / 2f, w / 2f) { drawPath(path, brush, style = Stroke(w)) }
+        val a = alpha().coerceIn(0f, 1f)
+        if (a > 0.004f) translate(w / 2f, w / 2f) { drawPath(path, brush, alpha = a, style = Stroke(w)) }
     }
 }
 
@@ -380,20 +382,21 @@ fun Modifier.glassSurface(
     shape: Shape,
     level: GlassLevel = GlassLevel.Low,
     fill: Color = AppTheme.colors.glassFill,
+    rimAlpha: () -> Float = { 1f },
 ): Modifier {
     val c = AppTheme.colors
     return this
         .glassShadow(shape, level, c.glassShadow)
         .glassFill(shape, fill)
-        .glassRim(shape, c.glassRimTop, c.glassRimBottom)
+        .glassRim(shape, c.glassRimTop, c.glassRimBottom, alpha = rimAlpha)
 }
 
 /** Floating control surface (pill track, circle buttons): the shared glass surface. */
 @Composable
-fun Modifier.glassControl(shape: Shape): Modifier {
+fun Modifier.glassControl(shape: Shape, rimAlpha: () -> Float = { 1f }): Modifier {
     val c = AppTheme.colors
     val reduced = LocalReducedMotion.current
-    return glassSurface(shape, GlassLevel.Low, if (reduced) c.glassControlFallback else c.glassFill)
+    return glassSurface(shape, GlassLevel.Low, if (reduced) c.glassControlFallback else c.glassFill, rimAlpha)
 }
 
 /**
