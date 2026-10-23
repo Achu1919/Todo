@@ -1173,3 +1173,31 @@ Sai's on-device feedback plus a screen-by-screen audit (light/dark × font 1.0/1
 - Plan your day: the swipe hint only sits on the front card. It used to peek out under the stacked cards.
 - Not done (recommendations): the lists-button repurpose (planned as the v0.13 view switcher); a scroll edge-fade on the panel's Due/Time chip rows; Robolectric shots don't show real nav-bar insets (verify the bottom fade on device).
 - Sheet: `out/shots/v0121-polish.png` (`scripts/v0121_sheets.py`; before = `out/shots/v0121-before/`). Full suite: 59 classes, 415 tests, 0 failures. Release 5.9 MB, aapt 22/0.12.1, verify_release OK.
+
+## Milestone 13 — views, Calendar, add-task toolbar (v0.13.0, versionCode 23)
+Scope agreed with Sai (pt32u/pt33u).
+- **View switcher (bottom-left):** the old lists button now opens a view switcher. Glass pills for Today / Upcoming / Recurring / Done, each with a count, spring up from it in a stagger. A scrim or Back closes it, and the button's icon follows the current view.
+- **Recurring view:** open repeating tasks (paused ones too), grouped Daily / Weekly / Monthly / Yearly. Each row shows the rule and list on the first line and "Next · <day> · <time>" (or Overdue / Paused) on the second. Pause/resume and stop sit at the end of the row. DB v6 adds the pause and reminder-lead columns with a real `MIGRATION_5_6`.
+- **Header:** Home · Todo · Calendar. The lists panel is gone: the gear on Home opens Settings, and lists are managed on Home ("Manage" / new list) and in Settings > Lists.
+- **Calendar page:**
+  - a week strip that pulls down to the month (or tap the handle);
+  - a horizontal swipe turns the week or month, and "Today" jumps back;
+  - dots show each day's lists;
+  - the selected day's list includes translucent projected repeats;
+  - long-press a task and drag it onto a day to reschedule it;
+  - tapping an empty day (today or later) adds a task on that day.
+- **Add-task toolbar:** Date, Time, Repeat, List, Priority, Reminder and Notes, in both the composer and the capture card. Each tool opens a glass popover with presets (plus a custom time, day-of-week repeat and a month grid). Choices show as removable chips. Typed phrases ("6pm", "every Monday") still parse, and toolbar choices win.
+- "Open app on" offers Home / Todo / Calendar. Widgets and notifications deep-link to a page.
+- Deviations:
+  - tapping an empty *past* day only selects it;
+  - saved views and lists moved from the panel to Home and Settings;
+  - no on-device checks (Robolectric only).
+- Tests:
+  - new: HomeHubTest, V13HomeTest, CaptureToolbarTest, PageLinkTest, MigrationTest 5→6 and 2→6, and V13ScreenshotTest (10 tests);
+  - full `-Pshots` suite: 463 tests, 462 pass. SearchMorphTest timed out waiting for Room under load; it passes alone, and its wait is now 30 s;
+  - non-shots suite after that: 329 tests, 0 failures.
+- Shots:
+  - `out/shots/v013-*-{light,dark}.png`;
+  - filmstrips `v013-{switcher,calendar-pull,toolbar}-filmstrip-*.png`;
+  - sheets `out/shots/v013-switcher.png`, `v013-calendar.png` and `v013-add-toolbar.png` (`scripts/v013_sheets.py`).
+- Release: 6,044,194 bytes, debug-key signed, aapt 23/0.13.0, verify_release OK. Copied to `../todo-v0.13.0.apk`.
