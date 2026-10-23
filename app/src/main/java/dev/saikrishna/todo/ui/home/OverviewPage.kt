@@ -1,6 +1,8 @@
 package dev.saikrishna.todo.ui.home
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -304,7 +306,12 @@ private fun StatTile(value: String, label: String, color: Color, modifier: Modif
             Box(Modifier.width(18.dp).height(3.dp).clip(Shapes.full).background(color))
             Spacer(Modifier.height(10.dp))
             Text(value, style = AppTheme.type.title.copy(fontSize = 26.sp, fontWeight = FontWeight.SemiBold), color = c.ink, maxLines = 1)
-            Text(label, style = AppTheme.type.meta.copy(fontSize = 12.sp), color = c.inkSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // v0.12.1: shrink a little at font scale 1.3 ("Upco…" before), then ellipsize.
+            BasicText(
+                label, style = AppTheme.type.meta.copy(fontSize = 12.sp, color = c.inkSecondary), maxLines = 1, softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+                autoSize = TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = 12.sp, stepSize = 0.5.sp),
+            )
         }
     }
 }
