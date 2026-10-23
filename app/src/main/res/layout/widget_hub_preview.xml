@@ -10,12 +10,11 @@
         </FrameLayout>
         <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginStart="6dp"
             android:text="@string/app_name" android:textSize="13sp" android:textStyle="bold" android:textColor="@color/widget_ink_secondary" />
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Fri 23" android:textSize="12sp" android:textColor="@color/widget_ink_secondary" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="11:30 am" android:textSize="12sp" android:textColor="@color/widget_ink_secondary" />
     </LinearLayout>
     <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="vertical" android:gravity="bottom"
-        android:paddingStart="6dp" android:paddingBottom="8dp">
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Next · 11:30 am" android:textSize="12sp" android:textStyle="bold" android:textColor="@color/widget_ink_secondary" />
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Team sync notes" android:textSize="18sp" android:fontFamily="serif" android:maxLines="2" android:textColor="@color/widget_ink" />
+        android:paddingStart="6dp" android:paddingEnd="4dp" android:paddingBottom="8dp">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Team sync notes" android:textSize="19sp" android:fontFamily="serif" android:maxLines="1" android:ellipsize="end" android:textColor="@color/widget_ink" />
     </LinearLayout>
     <LinearLayout android:layout_width="match_parent" android:layout_height="48dp" android:orientation="horizontal" android:gravity="center_vertical"
         android:background="@drawable/widget_soft_field" android:paddingStart="6dp" android:paddingEnd="6dp">

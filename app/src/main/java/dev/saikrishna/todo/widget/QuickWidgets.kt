@@ -250,7 +250,8 @@ internal fun chipsThatFit(chips: List<QuickChip>, width: Dp): Int {
     var left = width.value - 20 - 42 - 8 - 38 - 6
     var n = 0
     for (c in chips) {
-        val w = 22 + c.label.length * 7.2f + (if (c.listId == null || c.colorIndex != null) 19 else 0) + 6
+        // padding 22 + label (~5.8 dp/char at 13 sp medium, measured on renders) + sun 19 / dot 14 + gap 6.
+        val w = 22 + c.label.length * 5.8f + (if (c.listId == null) 19 else if (c.colorIndex != null) 14 else 0) + 6
         if (w > left) break
         left -= w; n++
     }
@@ -305,7 +306,14 @@ private fun QuickChipView(context: Context, chip: QuickChip) {
 @Composable
 fun HubContent(context: Context, data: QuickData) {
     val size = LocalSize.current
-    val compact = size.height < 170.dp
+    // 2x2 (~180 dp): header, ONE line of next task / "What's next?", Add, Voice + Plan (mock W4).
+    // Taller: a "Next · 10 am" label + two lines. Short (<160 dp): no header.
+    val compact = size.height < 160.dp
+    val roomy = size.height >= 210.dp
+    val next = data.next
+    // Without the label line, the next task's time takes the date's place in the header.
+    val headerRight = if (!roomy && next?.meta != null) next.meta else data.dateLabel
+    val headerRightColor = if (!roomy && next?.overdue == true) WidgetColors.danger else WidgetColors.inkSecondary
     Column(
         GlanceModifier.fillMaxSize().cornerRadius(28.dp).background(ImageProvider(R.drawable.widget_glass_hub)).padding(12.dp),
     ) {
@@ -319,22 +327,23 @@ fun HubContent(context: Context, data: QuickData) {
                 }
                 Spacer(GlanceModifier.width(6.dp))
                 Text(context.getString(R.string.app_name), style = TextStyle(color = WidgetColors.inkSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium), modifier = GlanceModifier.defaultWeight())
-                Text(data.dateLabel, style = TextStyle(color = WidgetColors.inkSecondary, fontSize = 12.sp))
+                Text(headerRight, maxLines = 1, style = TextStyle(color = headerRightColor, fontSize = 12.sp))
             }
         }
         // The next task fills the space above the buttons; tap opens it.
-        val next = data.next
         Column(
-            GlanceModifier.fillMaxWidth().defaultWeight().padding(start = 6.dp, bottom = 8.dp)
+            GlanceModifier.fillMaxWidth().defaultWeight().padding(start = 6.dp, end = 4.dp, bottom = 8.dp)
                 .clickable(actionStartActivity(if (next != null) openTaskIntent(context, next.id) else QuickWidgets.openApp(context))),
             verticalAlignment = Alignment.Bottom,
         ) {
-            if (next != null) {
+            if (next != null && roomy) {
                 Text(
                     if (next.meta != null) "Next · ${next.meta}" else "Next up",
                     style = TextStyle(color = if (next.overdue) WidgetColors.danger else WidgetColors.inkSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium),
                 )
-                Text(next.title, maxLines = if (compact) 1 else 2, style = TextStyle(color = WidgetColors.ink, fontSize = 18.sp, fontFamily = FontFamily.Serif))
+                Text(next.title, maxLines = 2, style = TextStyle(color = WidgetColors.ink, fontSize = 18.sp, fontFamily = FontFamily.Serif))
+            } else if (next != null) {
+                Text(next.title, maxLines = 1, style = TextStyle(color = WidgetColors.ink, fontSize = 19.sp, fontFamily = FontFamily.Serif))
             } else {
                 Text("What's next?", maxLines = 1, style = TextStyle(color = WidgetColors.ink, fontSize = 22.sp, fontFamily = FontFamily.Serif))
             }

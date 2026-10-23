@@ -297,11 +297,11 @@ class V12ScreenshotTest {
         save("v012-w1-pill-$m", drawView(glance(dark, 180, 56) { AddPillContent(it) }, 180, 56, dark))
         save("v012-w1-pill-narrow-$m", drawView(glance(dark, 120, 56) { AddPillContent(it) }, 120, 56, dark))
         save("v012-w2-round-$m", drawView(glance(dark, 64, 64) { AddRoundContent(it) }, 64, 64, dark))
-        save("v012-w3-quick-$m", drawView(glance(dark, 340, 56) { QuickListsContent(it, data) }, 340, 56, dark))
+        save("v012-w3-quick-$m", drawView(glance(dark, 370, 56) { QuickListsContent(it, data) }, 370, 56, dark))
         save("v012-w3-quick-narrow-$m", drawView(glance(dark, 200, 56) { QuickListsContent(it, data) }, 200, 56, dark))
-        save("v012-w4-hub-$m", drawView(glance(dark, 170, 170) { HubContent(it, data) }, 170, 170, dark))
-        save("v012-w4-hub-empty-$m", drawView(glance(dark, 170, 170) { HubContent(it, empty) }, 170, 170, dark))
-        save("v012-w4-hub-wide-$m", drawView(glance(dark, 260, 170) { HubContent(it, data) }, 260, 170, dark))
+        save("v012-w4-hub-$m", drawView(glance(dark, 182, 182) { HubContent(it, data) }, 182, 182, dark))
+        save("v012-w4-hub-empty-$m", drawView(glance(dark, 182, 182) { HubContent(it, empty) }, 182, 182, dark))
+        save("v012-w4-hub-wide-$m", drawView(glance(dark, 260, 230) { HubContent(it, data) }, 260, 230, dark))
         // The existing Today widget, unchanged, still renders.
         val td = today.toEpochDay()
         val wd = WidgetData.build(listOf(Task(id = 1, title = "Water the plants", createdAt = 1, dueDay = td)), today)
@@ -311,14 +311,14 @@ class V12ScreenshotTest {
         val inf = LayoutInflater.from(c)
         save("v012-preview-pill-$m", drawView(inf.inflate(R.layout.widget_add_pill_preview, host, false), 180, 56, dark))
         save("v012-preview-round-$m", drawView(inf.inflate(R.layout.widget_add_round_preview, host, false), 64, 64, dark))
-        save("v012-preview-quick-$m", drawView(inf.inflate(R.layout.widget_quick_lists_preview, host, false), 340, 56, dark))
-        save("v012-preview-hub-$m", drawView(inf.inflate(R.layout.widget_hub_preview, host, false), 170, 170, dark))
+        save("v012-preview-quick-$m", drawView(inf.inflate(R.layout.widget_quick_lists_preview, host, false), 370, 56, dark))
+        save("v012-preview-hub-$m", drawView(inf.inflate(R.layout.widget_hub_preview, host, false), 182, 182, dark))
         if (!dark) {
             // previewImage (pre-31 pickers / fallback): bare light renders, written as res candidates.
             save("v012-previewimage-pill", drawBare(glance(false, 180, 56) { AddPillContent(it) }, 180, 56, 0.75f))
             save("v012-previewimage-round", drawBare(glance(false, 64, 64) { AddRoundContent(it) }, 64, 64, 0.75f))
-            save("v012-previewimage-quick", drawBare(glance(false, 340, 56) { QuickListsContent(it, data) }, 340, 56, 0.75f))
-            save("v012-previewimage-hub", drawBare(glance(false, 170, 170) { HubContent(it, data) }, 170, 170, 0.75f))
+            save("v012-previewimage-quick", drawBare(glance(false, 370, 56) { QuickListsContent(it, data) }, 370, 56, 0.75f))
+            save("v012-previewimage-hub", drawBare(glance(false, 182, 182) { HubContent(it, data) }, 182, 182, 0.75f))
         }
     }
 

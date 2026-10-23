@@ -12,8 +12,13 @@ except OSError:
 
 
 def load(name):
+    """'name@bottom' keeps only the bottom 30% (the capture card on its scrim)."""
+    name, _, crop = name.partition('@')
     p = os.path.join(D, name + '.png')
-    return Image.open(p).convert('RGBA') if os.path.exists(p) else None
+    if not os.path.exists(p):
+        return None
+    im = Image.open(p).convert('RGBA')
+    return im.crop((0, int(im.height * 0.70), im.width, im.height)) if crop == 'bottom' else im
 
 
 def sheet(out, rows, scale=0.5, gap=24, label=40):
@@ -63,7 +68,7 @@ sheet('v012-widgets.png', [
      ('', 'v012-preview-hub-light', W)],
     [('dark', 'v012-preview-pill-dark', W), ('', 'v012-preview-round-dark', W), ('', 'v012-preview-quick-dark', W), ('', 'v012-preview-hub-dark', W)],
     [('Today widget (unchanged)', 'v012-today-widget-light', W), ('dark', 'v012-today-widget-dark', W)],
-    [('Capture · Work preset', 'v012-capture-work-light', 0.4), ('Today preset', 'v012-capture-today-light', 0.4),
-     ('Voice preset', 'v012-capture-voice-light', 0.4), ('Work · dark', 'v012-capture-work-dark', 0.4),
-     ('Today · dark', 'v012-capture-today-dark', 0.4), ('Voice · dark', 'v012-capture-voice-dark', 0.4)],
+    [('Capture · Work preset', 'v012-capture-work-light@bottom', 0.62), ('Today preset', 'v012-capture-today-light@bottom', 0.62),
+     ('Voice preset', 'v012-capture-voice-light@bottom', 0.62), ('Work · dark', 'v012-capture-work-dark@bottom', 0.62),
+     ('Today · dark', 'v012-capture-today-dark@bottom', 0.62), ('Voice · dark', 'v012-capture-voice-dark@bottom', 0.62)],
 ])
