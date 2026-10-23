@@ -91,6 +91,27 @@ class BottomFadeTest {
     @Test fun maskLight() = maskProfile(false)
     @Test fun maskDark() = maskProfile(true)
 
+    /** v0.12.1: below the composer pill's bottom edge nothing of the list shows (it sat at the floor). */
+    @Test fun nothingBelowThePill() {
+        val edge = 300f; val clear = 80f
+        rule.setContent {
+            AppTheme(darkTheme = false) {
+                Box(Modifier.fillMaxSize().background(Color.Black)) {
+                    Box(Modifier.fillMaxSize().bottomFade({ edge }, clearBelow = { clear }).background(Color.White))
+                }
+            }
+        }
+        rule.waitForIdle()
+        val b = rule.onRoot().captureToImage().asAndroidBitmap().copy(Bitmap.Config.ARGB_8888, false)
+        val x = b.width / 2
+        val atFloor = lum(b.getPixel(x, (b.height - edge + 20).toInt()))
+        val below = (b.height - clear.toInt() + 1 until b.height).maxOf { lum(b.getPixel(x, it)) }
+        val line = "floor band lum ${"%.1f".format(atFloor)}, max lum below the pill ${"%.1f".format(below)}"
+        println(line)
+        assertTrue(line, atFloor in 40.0..90.0) // 0.25 of white over black
+        assertTrue(line, below < 1.0)
+    }
+
     /** The list's bottom padding lets the last row come to rest above the fade. */
     @Test fun lastRowClearsTheFade() {
         runBlocking { db.taskDao().insertAll((1..16).map { Task(id = it.toLong(), title = "Row $it", createdAt = it.toLong()) }) }

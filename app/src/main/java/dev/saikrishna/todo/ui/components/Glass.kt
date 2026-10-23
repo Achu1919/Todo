@@ -271,6 +271,13 @@ fun Modifier.bottomFade(
     collapse: () -> Float = { 0f },
     collapsedFade: Dp = 28.dp,
     collapsedFloor: Float = 0.45f,
+    /**
+     * v0.12.1: px from the bottom (the composer pill's bottom edge: nav bar / IME + its margin).
+     * Below it nothing of the list shows (it used to sit there at [floor], so the last row peeked
+     * out under the pill); the fall from [floor] to 0 happens over [clearSoft], behind the pill.
+     */
+    clearBelow: () -> Float = { 0f },
+    clearSoft: Dp = 10.dp,
 ): Modifier = this
     .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
     .drawWithCache {
@@ -289,6 +296,14 @@ fun Modifier.bottomFade(
                 Brush.verticalGradient(*keys, startY = start, endY = end),
                 blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
             )
+            val clear = clearBelow()
+            if (clear > 0f) {
+                val cut = size.height - clear
+                drawRect(
+                    Brush.verticalGradient(listOf(Color.Black, Color.Transparent), startY = cut - clearSoft.toPx(), endY = cut),
+                    blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+                )
+            }
         }
     }
 

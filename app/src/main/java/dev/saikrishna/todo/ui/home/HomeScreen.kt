@@ -122,6 +122,8 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.runtime.collectAsState
 import dev.saikrishna.todo.ui.components.GlassLevel
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.union
 import java.time.LocalDateTime
 import java.time.ZoneId
 
@@ -496,10 +498,18 @@ fun HomeScreen(
                 // composer and the header edge.
                 Box(Modifier.fillMaxSize().hazeSource(hazeState).skyBackdrop(c).nestedScroll(chrome.connection)) {
                     val composerEdge = with(LocalDensity.current) { 6.dp.toPx() }
+                    // v0.12.1: the pill's bottom edge (Composer: IME or nav bar + 10 dp); nothing below it.
+                    val fadeDensity = LocalDensity.current
+                    val pillBottomInsets = WindowInsets.ime.union(WindowInsets.navigationBars)
+                    val pillMargin = with(fadeDensity) { 10.dp.toPx() }
                     AnimatedContent(
                         // Rows fade out over 36 dp above the composer (or undo bar) top.
                         modifier = Modifier
-                            .bottomFade({ bottomPx.intValue - composerEdge }, collapse = { chrome.progress.value }),
+                            .bottomFade(
+                                { bottomPx.intValue - composerEdge },
+                                collapse = { chrome.progress.value },
+                                clearBelow = { pillBottomInsets.getBottom(fadeDensity) + pillMargin },
+                            ),
                         targetState = filter,
                         transitionSpec = {
                             val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
