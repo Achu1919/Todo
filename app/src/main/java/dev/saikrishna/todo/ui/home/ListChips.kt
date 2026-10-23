@@ -1,5 +1,6 @@
 package dev.saikrishna.todo.ui.home
 
+import dev.saikrishna.todo.ui.components.horizontalEdgeFade
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -65,7 +66,7 @@ fun ListChipRow(options: List<ChipOption>, selected: Long?, onSelect: (Long?) ->
         modifier
             .fillMaxWidth()
             .padding(top = 12.dp)
-            .horizontalScroll(rememberScrollState()),
+            .let { m -> val s = rememberScrollState(); m.horizontalEdgeFade(s).horizontalScroll(s) },
         horizontalArrangement = Arrangement.spacedBy(7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

@@ -1,5 +1,6 @@
 package dev.saikrishna.todo.ui.home
 
+import dev.saikrishna.todo.ui.components.horizontalEdgeFade
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
@@ -122,7 +123,7 @@ fun ComposerToolRow(
             Modifier
                 .fillMaxWidth()
                 .testTag("composer-toolbar")
-                .horizontalScroll(rememberScrollState())
+                .let { m -> val s = rememberScrollState(); m.horizontalEdgeFade(s).horizontalScroll(s) }
                 .padding(start = inset, end = inset, top = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
@@ -182,7 +183,7 @@ fun DraftChips(
             Modifier
                 .fillMaxWidth()
                 .testTag("draft-chips")
-                .horizontalScroll(rememberScrollState())
+                .let { m -> val s = rememberScrollState(); m.horizontalEdgeFade(s).horizontalScroll(s) }
                 .padding(start = inset, end = inset, bottom = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {

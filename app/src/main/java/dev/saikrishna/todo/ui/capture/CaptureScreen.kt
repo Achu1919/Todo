@@ -1,5 +1,6 @@
 package dev.saikrishna.todo.ui.capture
 
+import dev.saikrishna.todo.ui.components.horizontalEdgeFade
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
@@ -357,7 +358,7 @@ private fun Form(
         )
         Spacer(Modifier.height(14.dp))
         Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp),
+            Modifier.fillMaxWidth().let { m -> val s = rememberScrollState(); m.horizontalEdgeFade(s).horizontalScroll(s) }.padding(horizontal = 20.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
