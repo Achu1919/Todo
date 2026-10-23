@@ -1,6 +1,10 @@
 package dev.saikrishna.todo.ui.panel
 
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.background
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -273,7 +277,13 @@ internal fun PanelAction(
     ) {
         icon()
         Spacer(Modifier.width(8.dp))
-        Text(text, style = AppTheme.type.label, color = color, maxLines = 1)
+        // v0.12.1: at large font scales the label shrinks a step (down to 75 %) rather than clipping.
+        val st = AppTheme.type.label
+        BasicText(
+            text, style = st.copy(color = color), maxLines = 1, softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+            autoSize = TextAutoSize.StepBased(minFontSize = st.fontSize * 0.75f, maxFontSize = st.fontSize, stepSize = 0.5.sp),
+        )
     }
 }
 
