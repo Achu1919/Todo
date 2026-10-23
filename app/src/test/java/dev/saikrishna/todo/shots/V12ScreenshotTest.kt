@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasText
@@ -195,7 +196,8 @@ class V12ScreenshotTest {
         strip("v012-chip-filter-filmstrip-${mode(dark)}", frames, 32)
         settle()
         save("v012-chips-work-${mode(dark)}", root())
-        tab("Upcoming"); settle()
+        tab("Upcoming"); settle(); settle()
+        rule.onNode(hasText("Upcoming") and role(Role.Tab)).assertIsSelected()
         save("v012-chips-upcoming-${mode(dark)}", root())
         tab("Done"); settle()
         save("v012-chips-done-${mode(dark)}", root())
