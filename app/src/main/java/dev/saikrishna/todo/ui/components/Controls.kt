@@ -116,6 +116,15 @@ fun <T> SegmentedPill(
     // v0.12: segment left edges (+ the end) when the segments are sized to their labels; null = equal.
     val segEdges = remember { androidx.compose.runtime.mutableStateOf<FloatArray?>(null) }
     val index = options.indexOf(selected).coerceAtLeast(0)
+    // v0.12.1: label size factor so all labels fit at large font scales (e.g. 1.3: "Upco…").
+    // Measured in layout; the labels recompose once at the smaller size (never below 0.72).
+    val fit = remember(androidx.compose.ui.platform.LocalDensity.current.fontScale) { mutableFloatStateOf(1f) }
+    val baseStyle = AppTheme.type.label
+    val labelStyle = if (fit.floatValue >= 0.999f) baseStyle else baseStyle.copy(
+        fontSize = baseStyle.fontSize * fit.floatValue,
+        letterSpacing = if (baseStyle.letterSpacing.isSp) baseStyle.letterSpacing * fit.floatValue else baseStyle.letterSpacing,
+        lineHeight = if (baseStyle.lineHeight.isSp) baseStyle.lineHeight * fit.floatValue else baseStyle.lineHeight,
+    )
     // Indicator position in SEGMENT units, initialised to the current segment. The capsule is
     // drawn at x × segW, and segW is measured in the same frame before draw, so the capsule is
     // present in the very first frame this pill is drawn (e.g. when Home is recreated by a Nav3
@@ -145,7 +154,7 @@ fun <T> SegmentedPill(
                 ) {
                     BasicText(
                         label(option),
-                        style = AppTheme.type.label,
+                        style = labelStyle,
                         color = { c.ink }, // opaque; recoloured below
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -191,6 +200,11 @@ fun <T> SegmentedPill(
             // spare width equally, so "Upcoming" never ellipsizes; equal split only if even that fails.
             val labels = measurables.map { it.maxIntrinsicWidth(h) }
             val spare = constraints.maxWidth - labels.sum()
+            // Labels at full size (the 6 dp text padding does not scale): shrink to fit, or grow back.
+            val padTotal = n * 2 * 6.dp.toPx()
+            val fullText = (labels.sum() - padTotal) / fit.floatValue
+            val want = ((constraints.maxWidth - padTotal) / fullText * 0.98f).coerceIn(0.72f, 1f)
+            if (kotlin.math.abs(want - fit.floatValue) > 0.01f && (spare < 0 || fit.floatValue < 1f)) fit.floatValue = want
             if (spare >= 0) {
                 val widths = IntArray(n) { labels[it] + spare / n }
                 val edges = FloatArray(n + 1); for (i in 0 until n) edges[i + 1] = edges[i] + widths[i]
