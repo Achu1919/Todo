@@ -85,7 +85,9 @@ class ListsPanelTest {
     private fun click(text: String) { rule.onNodeWithText(text).performSemanticsAction(SemanticsActions.OnClick); settle() }
     private fun clickRow(text: String) {
         val radio = androidx.compose.ui.test.SemanticsMatcher.expectValue(SemanticsProperties.Role, androidx.compose.ui.semantics.Role.RadioButton)
-        rule.onNode(androidx.compose.ui.test.hasText(text) and radio).performSemanticsAction(SemanticsActions.OnClick); settle()
+        // In the panel (v0.12 list chips on the page are radio buttons too).
+        val inPanel = androidx.compose.ui.test.hasAnyAncestor(androidx.compose.ui.test.hasTestTag("lists-panel"))
+        rule.onNode(androidx.compose.ui.test.hasText(text) and radio and inPanel).performSemanticsAction(SemanticsActions.OnClick); settle()
     }
     private fun buttonLabel() = rule.onNodeWithTag("lists-button").fetchSemanticsNode().config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString()
 

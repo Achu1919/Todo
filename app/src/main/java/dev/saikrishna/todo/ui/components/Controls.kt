@@ -113,6 +113,8 @@ fun <T> SegmentedPill(
     val reduced = LocalReducedMotion.current
     val height: Dp = if (style == PillStyle.Floating) PillSpec.Height else 40.dp
     val segW = remember { mutableFloatStateOf(0f) }
+    // v0.12: segment left edges (+ the end) when the segments are sized to their labels; null = equal.
+    val segEdges = remember { androidx.compose.runtime.mutableStateOf<FloatArray?>(null) }
     val index = options.indexOf(selected).coerceAtLeast(0)
     // Indicator position in SEGMENT units, initialised to the current segment. The capsule is
     // drawn at x × segW, and segW is measured in the same frame before draw, so the capsule is
@@ -157,18 +159,21 @@ fun <T> SegmentedPill(
             .then(trackModifier)
             .padding(PillSpec.Inset)
             .drawBehind {
-                if (segW.floatValue > 0f) drawRoundRect(
-                    color = c.ink,
-                    topLeft = Offset(x.value * segW.floatValue, 0f),
-                    size = Size(segW.floatValue, size.height),
-                    cornerRadius = CornerRadius(size.height / 2f),
-                )
+                if (segW.floatValue > 0f) {
+                    val (l, w) = segSpan(x.value, segW.floatValue, segEdges.value)
+                    drawRoundRect(
+                        color = c.ink,
+                        topLeft = Offset(l, 0f),
+                        size = Size(w, size.height),
+                        cornerRadius = CornerRadius(size.height / 2f),
+                    )
+                }
             }
             .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
             .drawWithContent {
                 drawContent()
-                val l = x.value * segW.floatValue
-                val r = l + segW.floatValue
+                val (l, sw) = segSpan(x.value, segW.floatValue, segEdges.value)
+                val r = l + sw
                 clipRect(left = l, right = r) { drawRect(c.onInk, blendMode = BlendMode.SrcIn) }
                 clipRect(left = l, right = r, clipOp = ClipOp.Difference) {
                     drawRect(c.inkSecondary, blendMode = BlendMode.SrcIn)
@@ -180,13 +185,40 @@ fun <T> SegmentedPill(
         val pad = PillSpec.SegmentPadding.roundToPx()
         val natural = measurables.maxOfOrNull { it.maxIntrinsicWidth(constraints.maxHeight) } ?: 0
         var w = maxOf(PillSpec.MinSegment.roundToPx(), natural + 2 * pad - 12.dp.roundToPx())
-        if (constraints.hasBoundedWidth && w * n > constraints.maxWidth) w = constraints.maxWidth / n
         val h = constraints.maxHeight
+        if (constraints.hasBoundedWidth && w * n > constraints.maxWidth) {
+            // v0.12 (four tabs): too narrow for equal segments. Size each to its label and share the
+            // spare width equally, so "Upcoming" never ellipsizes; equal split only if even that fails.
+            val labels = measurables.map { it.maxIntrinsicWidth(h) }
+            val spare = constraints.maxWidth - labels.sum()
+            if (spare >= 0) {
+                val widths = IntArray(n) { labels[it] + spare / n }
+                val edges = FloatArray(n + 1); for (i in 0 until n) edges[i + 1] = edges[i] + widths[i]
+                if (segEdges.value?.contentEquals(edges) != true) segEdges.value = edges
+                if (segW.floatValue != widths[0].toFloat()) segW.floatValue = widths[0].toFloat()
+                val placeables = measurables.mapIndexed { i, m -> m.measure(Constraints.fixed(widths[i], h)) }
+                return@Layout layout(edges[n].toInt(), h) { placeables.forEachIndexed { i, p -> p.place(edges[i].toInt(), 0) } }
+            }
+            w = constraints.maxWidth / n
+        }
+        if (segEdges.value != null) segEdges.value = null
         // Measured segment width, read by the draw phase (indicator = x × segW).
         if (segW.floatValue != w.toFloat()) segW.floatValue = w.toFloat()
         val placeables = measurables.map { it.measure(Constraints.fixed(w, h)) }
         layout(w * n, h) { placeables.forEachIndexed { i, p -> p.place(i * w, 0) } }
     }
+}
+
+/** Indicator left + width at fractional segment [x]: equal segments, or interpolated label-sized ones. */
+private fun segSpan(x: Float, segW: Float, edges: FloatArray?): Pair<Float, Float> {
+    if (edges == null) return x * segW to segW
+    val n = edges.size - 1
+    val i = x.toInt().coerceIn(0, n - 1)
+    val j = (i + 1).coerceAtMost(n - 1)
+    val f = (x - i).coerceIn(-1f, 2f)
+    val l0 = edges[i]; val w0 = edges[i + 1] - edges[i]
+    val l1 = edges[j]; val w1 = edges[j + 1] - edges[j]
+    return (l0 + (l1 - l0) * f) to (w0 + (w1 - w0) * f)
 }
 
 /** Capsule chip: ink when selected (onInk label), ink 6 % otherwise. Colours tween on `select`, read in draw. */

@@ -27,3 +27,19 @@ class SettingsTest {
         assertFalse(ThemeMode.Light.isDark(systemDark = true))
     }
 }
+
+class SettingsV12Test {
+    @Test fun openOnDefaultsToToday() {
+        assertEquals(StartPage.Today, AppSettings.from(null, null, null).openOn)
+        assertEquals(StartPage.Today, AppSettings().openOn)
+        assertEquals(StartPage.Overview, AppSettings.from(null, null, null, openOn = "Overview").openOn)
+        assertEquals(StartPage.Today, StartPage.parse("Upcoming?"))
+        assertEquals(StartPage.Today, StartPage.parse(null))
+    }
+
+    @Test fun greetingNameIsTrimmedAndCapped() {
+        assertEquals("", AppSettings.from(null, null, null).name)
+        assertEquals("Sai", AppSettings.from(null, null, null, name = "  Sai ").name)
+        assertEquals(AppSettings.NameMax, AppSettings.from(null, null, null, name = "x".repeat(60)).name.length)
+    }
+}

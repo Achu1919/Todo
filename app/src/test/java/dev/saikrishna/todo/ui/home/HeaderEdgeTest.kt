@@ -17,6 +17,7 @@ import dev.saikrishna.todo.ui.motion.ProvideMotion
 import dev.saikrishna.todo.ui.theme.AppTheme
 import org.junit.Assert.assertTrue
 import org.junit.Rule
+import androidx.compose.ui.test.onNodeWithTag
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -107,7 +108,9 @@ class HeaderEdgeTest {
     }
 
     private fun check(dark: Boolean, reduce: Boolean = false) {
-        val b = render(dark, reduce)
+        // v0.12: the theme toggle sits in the heading row inside this strip; hide it for the measurement.
+        HomeTestHooks.hideThemeToggle = true
+        val b = try { render(dark, reduce) } finally { HomeTestHooks.hideThemeToggle = false }
         val d = b.height / 891.0 // px per dp
         // Header controls end at status + 8 dp + 48 dp; their shadows reach ~12 dp below.
         val y0 = StatusPx + ((8 + 48 + 14) * d).toInt()

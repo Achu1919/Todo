@@ -123,7 +123,11 @@ class PressFeedbackTest {
         // around the checkbox (its 48 dp box and 24 dp beyond, where a ripple would show) nothing.
         val around = Rect(box.left - 24 * d, box.top - 24 * d, box.right + 24 * d, box.bottom + 24 * d)
         val textStart = box.right + 2 * d
-        val outsideAround = { x: Int, y: Int -> inRing(x, y) || !around.contains(androidx.compose.ui.geometry.Offset(x + 0.5f, y + 0.5f)) || x >= textStart }
+        // v0.12: the row's list accent bar (4 dp, 6 dp in from the card edge) dims with the done
+        // state, like the title: a state change on the row, not press feedback.
+        val cardLeft = card(2).left
+        val onBar = { x: Int, _: Int -> x + 0.5f >= cardLeft + 5 * d && x + 0.5f <= cardLeft + 11 * d }
+        val outsideAround = { x: Int, y: Int -> inRing(x, y) || onBar(x, y) || !around.contains(androidx.compose.ui.geometry.Offset(x + 0.5f, y + 0.5f)) || x >= textStart }
         for (i in 1..12) {
             rule.mainClock.advanceTimeByFrame()
             val f = frame(); frames += f

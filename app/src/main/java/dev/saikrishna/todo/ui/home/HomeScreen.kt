@@ -435,7 +435,9 @@ fun HomeScreen(
             dark = darkNow,
             onToggle = { applyTheme(if (darkNow) ThemeMode.Light else ThemeMode.Dark) },
             onMenu = { haptics.tick(); chrome.dismiss(); menu = MenuIds.THEME_MENU },
-            modifier = Modifier.onGloballyPositioned { themeCenter = it.boundsInRoot().center },
+            modifier = Modifier
+                .graphicsLayer { if (HomeTestHooks.hideThemeToggle) alpha = 0f }
+                .onGloballyPositioned { themeCenter = it.boundsInRoot().center },
             anchor = Modifier.panelAnchor(menuAnchors, MenuIds.THEME_MENU),
         )
     }
@@ -575,9 +577,11 @@ fun HomeScreen(
                             caption = captionFor(page, pages, items, chipId != null),
                             headingTrailing = themeButton,
                             headingExtra = {
-                                if (chipsOn) {
+                                // Only worth a row when the page mixes at least two lists (or one is picked).
+                                val options = if (chipsOn) chipOptions(pages[page], chipLists, chipId) else emptyList()
+                                if (options.size >= 3 || (chipId != null && options.isNotEmpty())) {
                                     ListChipRow(
-                                        options = chipOptions(pages[page], chipLists, chipId),
+                                        options = options,
                                         selected = chipId,
                                         onSelect = { id -> if (id == null) chipFilter.remove(page) else chipFilter[page] = id },
                                     )
@@ -901,4 +905,7 @@ object HomeTestHooks {
     var chrome: ComposerChrome? = null
 
     var menuStyle: PanelStyle? = null
+
+    /** v0.12: hides the heading-row theme toggle (header-edge luminance strips measure past it). */
+    var hideThemeToggle = false
 }
