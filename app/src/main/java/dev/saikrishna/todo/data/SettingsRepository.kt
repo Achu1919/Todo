@@ -17,12 +17,24 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 
-/** v0.12: "Open app on". */
+/**
+ * "Open app on". v0.13: the three header pages. Values stored by v0.12 are migrated when read
+ * ("Overview" → Home, "Today" → Todo) and rewritten in the new form on the next launch
+ * ([SettingsRepository.migrateOpenOn]); anything unknown opens Todo.
+ */
 enum class StartPage {
-    Overview, Today;
+    Home, Todo, Calendar;
 
     companion object {
-        fun parse(name: String?): StartPage = entries.firstOrNull { it.name == name } ?: Today
+        fun parse(name: String?): StartPage = when (name) {
+            "Overview" -> Home
+            "Today" -> Todo
+            else -> entries.firstOrNull { it.name == name } ?: Todo
+        }
+
+        /** The stored value to write back, or null when it is already current (or absent). */
+        fun migrated(stored: String?): String? =
+            if (stored == null || entries.any { it.name == stored }) null else parse(stored).name
     }
 }
 
@@ -45,8 +57,8 @@ data class AppSettings(
     val reduceMotion: Boolean = false,
     val haptics: Boolean = true,
     val theme: ThemeMode = ThemeMode.System,
-    /** v0.12: the page the app opens on (default Today). */
-    val openOn: StartPage = StartPage.Today,
+    /** v0.12: the page the app opens on (v0.13 default Todo, the task list). */
+    val openOn: StartPage = StartPage.Todo,
     /** v0.12: optional first name for the Overview greeting ("" = none). */
     val name: String = "",
 ) {
@@ -102,6 +114,10 @@ class SettingsRepository(context: Context) {
     suspend fun setReduceMotion(on: Boolean) { store.edit { it[Keys.ReduceMotion] = on } }
     suspend fun setHaptics(on: Boolean) { store.edit { it[Keys.Haptics] = on } }
     suspend fun setTheme(mode: ThemeMode) { store.edit { it[Keys.Theme] = mode.name } }
+    /** v0.13: rewrites a v0.12 "Open app on" value in the new form (idempotent). */
+    suspend fun migrateOpenOn() {
+        store.edit { p -> StartPage.migrated(p[Keys.OpenOn])?.let { p[Keys.OpenOn] = it } }
+    }
     suspend fun setOpenOn(page: StartPage) { store.edit { it[Keys.OpenOn] = page.name } }
     suspend fun setGreetingName(name: String) { store.edit { it[Keys.GreetingName] = name.trim().take(AppSettings.NameMax) } }
 

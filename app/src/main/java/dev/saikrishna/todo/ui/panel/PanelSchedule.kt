@@ -103,7 +103,7 @@ internal fun TimeSection(task: Task, now: LocalDateTime, onSetDueAt: (dueDay: Lo
     }
 }
 
-private enum class RepeatKind(val label: String) { Never("Never"), Daily("Daily"), Weekdays("Weekdays"), Weekly("Weekly"), Monthly("Monthly"), After("After done") }
+private enum class RepeatKind(val label: String) { Never("Never"), Daily("Daily"), Weekdays("Weekdays"), Weekly("Weekly"), Monthly("Monthly"), Yearly("Yearly"), After("After done") }
 
 private fun RepeatRule?.kind(): RepeatKind = when (this) {
     null -> RepeatKind.Never
@@ -111,6 +111,7 @@ private fun RepeatRule?.kind(): RepeatKind = when (this) {
     RepeatRule.Weekdays -> RepeatKind.Weekdays
     is RepeatRule.Weekly -> RepeatKind.Weekly
     is RepeatRule.Monthly -> RepeatKind.Monthly
+    is RepeatRule.Yearly -> RepeatKind.Yearly
     is RepeatRule.AfterCompletion -> RepeatKind.After
 }
 
@@ -137,6 +138,7 @@ internal fun RepeatSection(task: Task, today: LocalDate, onSetRepeat: (rule: Rep
         RepeatKind.Weekdays -> RepeatRule.Weekdays
         RepeatKind.Weekly -> RepeatRule.Weekly(setOf(anchor.dayOfWeek), 1)
         RepeatKind.Monthly -> RepeatRule.Monthly(anchor.dayOfMonth)
+        RepeatKind.Yearly -> RepeatRule.Yearly(anchor.monthValue, anchor.dayOfMonth)
         RepeatKind.After -> RepeatRule.AfterCompletion(7)
     }
     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -160,7 +162,11 @@ internal fun RepeatSection(task: Task, today: LocalDate, onSetRepeat: (rule: Rep
                     Spacer(Modifier.height(8.dp))
                     Stepper("Every", r.every, if (r.every == 1) "week" else "weeks", 1..8) { apply(r.copy(every = it)) }
                 }
-                is RepeatRule.Monthly -> Stepper("On the", r.day, null, 1..31, valueText = { ordinal(it) }) { apply(RepeatRule.Monthly(it)) }
+                is RepeatRule.Monthly -> {
+                    Stepper("On the", r.day, null, 1..31, valueText = { ordinal(it) }) { apply(r.copy(day = it)) }
+                    Spacer(Modifier.height(8.dp))
+                    Stepper("Every", r.every, if (r.every == 1) "month" else "months", 1..12) { apply(r.copy(every = it)) }
+                }
                 is RepeatRule.AfterCompletion -> Stepper("", r.days, if (r.days == 1) "day after done" else "days after done", 1..90) { apply(RepeatRule.AfterCompletion(it)) }
                 else -> Unit
             }

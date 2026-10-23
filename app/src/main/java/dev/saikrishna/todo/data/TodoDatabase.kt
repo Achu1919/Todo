@@ -11,7 +11,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import dev.saikrishna.todo.domain.TemplateCodec
 import dev.saikrishna.todo.domain.Templates
 
-@Database(entities = [Task::class, TaskList::class, Subtask::class, TemplateEntity::class, SavedView::class], version = 5, exportSchema = true)
+@Database(entities = [Task::class, TaskList::class, Subtask::class, TemplateEntity::class, SavedView::class], version = 6, exportSchema = true)
 abstract class TodoDatabase : RoomDatabase() {
     abstract fun taskDao(): TaskDao
     abstract fun orgDao(): OrgDao
@@ -54,6 +54,18 @@ abstract class TodoDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) = createViewsTable(db)
         }
 
+        /**
+         * v0.12 (schema 5) → v0.13 (schema 6): two task columns with defaults: repeat_paused
+         * (pause a repeating task) and remind_before (minutes before the due time). Every row
+         * keeps its values (MigrationTest 5 → 6 and 2 → 6).
+         */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `tasks` ADD COLUMN `repeat_paused` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `tasks` ADD COLUMN `remind_before` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         private fun createViewsTable(db: SupportSQLiteDatabase) {
             db.execSQL("CREATE TABLE IF NOT EXISTS `saved_views` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `query` TEXT NOT NULL DEFAULT '', `filter` TEXT NOT NULL DEFAULT '', `position` INTEGER NOT NULL DEFAULT 0)")
         }
@@ -86,7 +98,7 @@ abstract class TodoDatabase : RoomDatabase() {
 
         fun build(context: Context): TodoDatabase =
             Room.databaseBuilder(context, TodoDatabase::class.java, "todo.db")
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .addCallback(SeedOnCreate)
                 // Only the pre-release schema 1 (never shipped to Sai) may still be wiped.
                 .fallbackToDestructiveMigrationFrom(dropAllTables = true, 1)

@@ -29,12 +29,24 @@ class SettingsTest {
 }
 
 class SettingsV12Test {
-    @Test fun openOnDefaultsToToday() {
-        assertEquals(StartPage.Today, AppSettings.from(null, null, null).openOn)
-        assertEquals(StartPage.Today, AppSettings().openOn)
-        assertEquals(StartPage.Overview, AppSettings.from(null, null, null, openOn = "Overview").openOn)
-        assertEquals(StartPage.Today, StartPage.parse("Upcoming?"))
-        assertEquals(StartPage.Today, StartPage.parse(null))
+    @Test fun openOnDefaultsToTodo() {
+        assertEquals(StartPage.Todo, AppSettings.from(null, null, null).openOn)
+        assertEquals(StartPage.Todo, AppSettings().openOn)
+        assertEquals(StartPage.Calendar, AppSettings.from(null, null, null, openOn = "Calendar").openOn)
+        assertEquals(StartPage.Todo, StartPage.parse("Upcoming?"))
+        assertEquals(StartPage.Todo, StartPage.parse(null))
+    }
+
+    /** v0.13: v0.12 values map onto the new pages and are rewritten once; current values stay. */
+    @Test fun openOnMigratesV012Values() {
+        assertEquals(StartPage.Home, AppSettings.from(null, null, null, openOn = "Overview").openOn)
+        assertEquals(StartPage.Todo, AppSettings.from(null, null, null, openOn = "Today").openOn)
+        assertEquals("Home", StartPage.migrated("Overview"))
+        assertEquals("Todo", StartPage.migrated("Today"))
+        assertEquals("Todo", StartPage.migrated("Bogus"))
+        assertEquals(null, StartPage.migrated("Home"))
+        assertEquals(null, StartPage.migrated("Calendar"))
+        assertEquals(null, StartPage.migrated(null))
     }
 
     @Test fun greetingNameIsTrimmedAndCapped() {

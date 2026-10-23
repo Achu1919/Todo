@@ -15,12 +15,12 @@ import androidx.core.net.toUri
 import dev.saikrishna.todo.MainActivity
 import dev.saikrishna.todo.R
 import dev.saikrishna.todo.data.Task
-import dev.saikrishna.todo.data.dueAtMillis
+import dev.saikrishna.todo.data.remindAtMillis
 import dev.saikrishna.todo.domain.QuickParse
 import java.time.ZoneId
 
 /**
- * Reminders fire at a task's due time (no offset, by design for v0.6).
+ * Reminders fire at a task's due time, or v0.13 [Task.remindBefore] minutes earlier.
  *
  * - Exact (`setExactAndAllowWhileIdle`) when the app may schedule exact alarms
  *   (`AlarmManager.canScheduleExactAlarms()`: SCHEDULE_EXACT_ALARM granted by the user in system
@@ -55,7 +55,7 @@ object Reminders {
 
     /** Schedules (or cancels) the reminder for [task] according to its current state. */
     fun sync(context: Context, task: Task, now: Long = System.currentTimeMillis(), zone: ZoneId = ZoneId.systemDefault()) {
-        val at = task.dueAtMillis(zone)
+        val at = task.remindAtMillis(zone)
         if (task.done || at == null || at <= now) cancel(context, task.id) else schedule(context, task.id, at)
     }
 

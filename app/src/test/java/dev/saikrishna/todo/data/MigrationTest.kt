@@ -180,4 +180,53 @@ class MigrationTest {
         assertEquals(emptyList<SavedView>(), db.orgDao().observeViews().first())
         db.close()
     }
+
+    /**
+     * v0.12 (schema 5) → v0.13 (schema 6): repeat_paused and remind_before are added with their
+     * defaults; every row, list, subtask, template and saved view is kept exactly.
+     */
+    @Test fun migrate5To6KeepsEverythingAndAddsPauseAndReminderLead() = runBlocking {
+        createFromSchema(5) {
+            execSQL("INSERT INTO lists (id, name, color, emoji, position, area) VALUES (1, 'Personal', 2, NULL, 0, 0), (2, 'Work', 0, NULL, 1, 1), (5, 'Home', 3, '🏠', 2, 0)")
+            execSQL("INSERT INTO templates (id, name, body, position) VALUES (1, 'Weekly review', '[]', 0)")
+            execSQL("INSERT INTO saved_views (id, name, query, filter, position) VALUES (4, 'Bills', 'rent', 'tag=bills', 0)")
+            execSQL("INSERT INTO tasks (id, title, notes, done, created_at, completed_at, due_day, priority, due_minute, repeat_rule, list_id, tags, sort_order) VALUES (3, 'Pay rent', 'HDFC', 0, 100, NULL, 20385, 2, 600, 'M:1', 5, 'bills home', 7)")
+            execSQL("INSERT INTO tasks (id, title, notes, done, created_at, completed_at, due_day, priority, due_minute, repeat_rule, list_id, tags, sort_order) VALUES (8, 'Gym', '', 1, 200, 300, NULL, 1, NULL, NULL, 1, '', 200)")
+            execSQL("INSERT INTO subtasks (id, task_id, title, done, position) VALUES (1, 3, 'Transfer', 1, 0)")
+        }
+        val db = TodoDatabase.build(ctx)
+        assertEquals(
+            listOf(
+                Task(id = 3, title = "Pay rent", notes = "HDFC", createdAt = 100, dueDay = 20385, priorityCode = 2, dueMinute = 600, repeatRule = "M:1", listId = 5, tags = "bills home", sortOrder = 7),
+                Task(id = 8, title = "Gym", done = true, createdAt = 200, completedAt = 300, priorityCode = 1, listId = 1, sortOrder = 200),
+            ),
+            db.taskDao().observeAll().first(),
+        )
+        val org = db.orgDao()
+        assertEquals(listOf("Personal", "Work", "Home"), org.lists().map { it.name })
+        assertEquals(listOf("Transfer"), org.subtasksOf(3).map { it.title })
+        assertEquals(listOf("Weekly review"), org.observeTemplates().first().map { it.name })
+        assertEquals(listOf(SavedView(4, "Bills", "rent", "tag=bills", 0)), org.observeViews().first())
+        // The new columns work.
+        val repo = TaskRepository(db)
+        repo.setRepeatPaused(3, true)
+        repo.setRemindBefore(3, 60)
+        val t = db.taskDao().get(3)!!
+        assertEquals(true, t.repeatPaused)
+        assertEquals(60, t.remindBefore)
+        assertNull(t.activeRepeat)
+        assertEquals(RepeatRule.Monthly(1), t.repeat)
+        db.close()
+    }
+
+    /** The oldest shipped schema still reaches 6 through every step. */
+    @Test fun migrate2To6() = runBlocking {
+        createV2 { execSQL("INSERT INTO tasks (id, title, notes, done, created_at, completed_at, due_day, priority) VALUES (1, 'Pay rent', 'HDFC', 0, 100, NULL, 20385, 2)") }
+        val db = TodoDatabase.build(ctx)
+        val t = db.taskDao().observeAll().first().single()
+        assertEquals("Pay rent", t.title)
+        assertEquals(false, t.repeatPaused)
+        assertEquals(0, t.remindBefore)
+        db.close()
+    }
 }

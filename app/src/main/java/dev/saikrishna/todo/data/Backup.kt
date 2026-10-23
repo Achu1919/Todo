@@ -84,6 +84,8 @@ object BackupCodec {
         put("createdAt", t.createdAt); putOpt("completedAt", t.completedAt); putOpt("dueDay", t.dueDay)
         put("priority", t.priorityCode); putOpt("dueMinute", t.dueMinute); putOpt("repeat", t.repeatRule)
         put("listId", t.listId); put("tags", t.tags); put("sortOrder", t.sortOrder)
+        if (t.repeatPaused) put("repeatPaused", true)
+        if (t.remindBefore != 0) put("remindBefore", t.remindBefore)
     }
 
     /** Parses and validates; throws [BackupException] with a user-facing message. */
@@ -109,10 +111,12 @@ object BackupCodec {
                     title = it.getString("title").trim().ifEmpty { throw BackupException("A task has no title.") }.take(500),
                     notes = it.optString("notes", ""), done = it.optBoolean("done", false), createdAt = created,
                     completedAt = it.optLongOrNull("completedAt"), dueDay = it.optLongOrNull("dueDay"),
-                    priorityCode = it.optInt("priority", 0).coerceIn(0, 2),
+                    priorityCode = it.optInt("priority", 0).coerceIn(0, 3),
                     dueMinute = it.optIntOrNull("dueMinute")?.takeIf { m -> m in 0 until 24 * 60 },
                     repeatRule = it.optStringOrNull("repeat"), listId = it.optLong("listId", TaskList.PERSONAL),
                     tags = Tags.join(Tags.split(it.optString("tags", ""))), sortOrder = it.optLong("sortOrder", created),
+                    repeatPaused = it.optBoolean("repeatPaused", false),
+                    remindBefore = it.optInt("remindBefore", 0).coerceIn(0, MaxRemindBefore),
                 )
             }
             val subtasks = objects(o, "subtasks").map {

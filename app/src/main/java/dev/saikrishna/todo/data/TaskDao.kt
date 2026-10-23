@@ -56,6 +56,12 @@ interface TaskDao {
     @Query("UPDATE tasks SET due_day = :day WHERE id = :id")
     suspend fun setDueKeepTime(id: Long, day: Long)
 
+    @Query("UPDATE tasks SET repeat_paused = :paused WHERE id = :id")
+    suspend fun setRepeatPaused(id: Long, paused: Boolean)
+
+    @Query("UPDATE tasks SET remind_before = :minutes WHERE id = :id")
+    suspend fun setRemindBefore(id: Long, minutes: Int)
+
     @Query("SELECT * FROM tasks WHERE id = :id")
     suspend fun get(id: Long): Task?
 

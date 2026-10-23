@@ -144,7 +144,7 @@ internal fun MetaLine(meta: RowMeta, modifier: Modifier = Modifier, onTag: ((Str
         if (meta.priority != Priority.None) {
             if (needsSep) BasicText(" · ", style = style, color = { c.inkTertiary })
             val high = meta.priority == Priority.High
-            BasicText(if (high) "High" else "Low", style = style, color = { if (high) c.danger else c.inkSecondary })
+            BasicText(meta.priority.name, style = style, color = { if (high) c.danger else if (meta.priority == Priority.Medium) c.warning else c.inkSecondary })
             needsSep = true
         }
         if (meta.hasNotes) {

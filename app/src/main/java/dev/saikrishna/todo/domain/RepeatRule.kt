@@ -20,8 +20,13 @@ sealed interface RepeatRule {
     data object Weekdays : RepeatRule
     /** On [days] of every [every]-th week (weeks counted from the due date's week, Monday-based). */
     data class Weekly(val days: Set<DayOfWeek>, val every: Int = 1) : RepeatRule
-    /** On day [day] of every month, clamped to the month's last day (31 → 30 Apr, 28/29 Feb). */
-    data class Monthly(val day: Int) : RepeatRule
+    /**
+     * On day [day] of every [every]-th month (v0.13: [every], counted from the due date's month),
+     * clamped to the month's last day (31 → 30 Apr, 28/29 Feb).
+     */
+    data class Monthly(val day: Int, val every: Int = 1) : RepeatRule
+    /** v0.13: every year on [month]/[day] (29 Feb → 28 Feb in common years). */
+    data class Yearly(val month: Int, val day: Int) : RepeatRule
     /** [days] days after the day it was completed (not on a fixed schedule). */
     data class AfterCompletion(val days: Int) : RepeatRule
 
@@ -29,7 +34,8 @@ sealed interface RepeatRule {
         is Daily -> "D:$every"
         Weekdays -> "WD"
         is Weekly -> "W:$every:" + days.sorted().joinToString(",") { it.value.toString() }
-        is Monthly -> "M:$day"
+        is Monthly -> if (every == 1) "M:$day" else "M:$day:$every"
+        is Yearly -> "Y:$month:$day"
         is AfterCompletion -> "A:$days"
     }
 
@@ -46,7 +52,8 @@ sealed interface RepeatRule {
                         val days = p[2].split(",").filter { it.isNotBlank() }.map { DayOfWeek.of(it.toInt()) }.toSet()
                         if (days.isEmpty()) null else Weekly(days, p[1].toInt().coerceAtLeast(1))
                     }
-                    "M" -> Monthly(p[1].toInt().coerceIn(1, 31))
+                    "M" -> Monthly(p[1].toInt().coerceIn(1, 31), p.getOrNull(2)?.toInt()?.coerceAtLeast(1) ?: 1)
+                    "Y" -> Yearly(p[1].toInt().coerceIn(1, 12), p[2].toInt().coerceIn(1, 31))
                     "A" -> AfterCompletion(p[1].toInt().coerceAtLeast(1))
                     else -> null
                 }
@@ -75,7 +82,8 @@ fun RepeatRule.label(): String = when (this) {
         val d = days.sorted().joinToString(", ") { it.short() }
         if (every == 1) "Every $d" else "Every $every weeks · $d"
     }
-    is RepeatRule.Monthly -> "Monthly · ${ordinal(day)}"
+    is RepeatRule.Monthly -> if (every == 1) "Monthly · ${ordinal(day)}" else "Every $every months · ${ordinal(day)}"
+    is RepeatRule.Yearly -> "Yearly · $day ${java.time.Month.of(month).getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.ENGLISH)}"
     is RepeatRule.AfterCompletion -> if (days == 1) "1 day after done" else "$days days after done"
 }
 
@@ -123,11 +131,24 @@ fun nextOccurrence(rule: RepeatRule, due: LocalDate?, completedOn: LocalDate): L
             @Suppress("UNREACHABLE_CODE") error("unreachable")
         }
         is RepeatRule.Monthly -> {
-            var ym = YearMonth.from(after)
+            val n = rule.every.coerceAtLeast(1).toLong()
+            val first = YearMonth.from(base)
+            // Months on the schedule are first + k·n; start at the cycle just before `after`'s month.
+            val gap = java.time.temporal.ChronoUnit.MONTHS.between(first, YearMonth.from(after))
+            var ym = first.plusMonths(((gap / n) - 1).coerceAtLeast(0) * n)
             while (true) {
                 val date = ym.atDay(minOf(rule.day, ym.lengthOfMonth()))
                 if (date.isAfter(after)) return date
-                ym = ym.plusMonths(1)
+                ym = ym.plusMonths(n)
+            }
+            @Suppress("UNREACHABLE_CODE") error("unreachable")
+        }
+        is RepeatRule.Yearly -> {
+            var y = after.year
+            while (true) {
+                val date = yearlyDate(rule, y)
+                if (date.isAfter(after)) return date
+                y++
             }
             @Suppress("UNREACHABLE_CODE") error("unreachable")
         }
@@ -145,4 +166,51 @@ fun firstOccurrence(rule: RepeatRule, from: LocalDate): LocalDate = when (rule) 
         val here = ym.atDay(minOf(rule.day, ym.lengthOfMonth()))
         if (!here.isBefore(from)) here else ym.plusMonths(1).let { it.atDay(minOf(rule.day, it.lengthOfMonth())) }
     }
+    is RepeatRule.Yearly -> yearlyDate(rule, from.year).let { if (!it.isBefore(from)) it else yearlyDate(rule, from.year + 1) }
+}
+
+private fun yearlyDate(rule: RepeatRule.Yearly, year: Int): LocalDate {
+    val ym = YearMonth.of(year, rule.month)
+    return ym.atDay(minOf(rule.day, ym.lengthOfMonth()))
+}
+
+/** v0.13 Recurring view: the four groups; custom rules go to the nearest one. */
+enum class RepeatGroup(val title: String) { Daily("Daily"), Weekly("Weekly"), Monthly("Monthly"), Yearly("Yearly") }
+
+fun RepeatRule.group(): RepeatGroup = when (this) {
+    is RepeatRule.Daily -> daysGroup(every)
+    is RepeatRule.AfterCompletion -> daysGroup(days)
+    RepeatRule.Weekdays -> RepeatGroup.Daily
+    is RepeatRule.Weekly -> when {
+        every < 4 -> RepeatGroup.Weekly
+        every < 52 -> RepeatGroup.Monthly
+        else -> RepeatGroup.Yearly
+    }
+    is RepeatRule.Monthly -> if (every < 12) RepeatGroup.Monthly else RepeatGroup.Yearly
+    is RepeatRule.Yearly -> RepeatGroup.Yearly
+}
+
+private fun daysGroup(n: Int): RepeatGroup = when {
+    n < 7 -> RepeatGroup.Daily
+    n < 28 -> RepeatGroup.Weekly
+    n < 365 -> RepeatGroup.Monthly
+    else -> RepeatGroup.Yearly
+}
+
+/**
+ * v0.13 Calendar: the dates a repeating task lands on AFTER [due] (its current due date), within
+ * [from]..[to] inclusive, at most [limit]. Completing on the due day each time is assumed, so
+ * "after completion" rules project as every N days. [due] itself is not included (it is the task).
+ */
+fun futureOccurrences(rule: RepeatRule, due: LocalDate, from: LocalDate, to: LocalDate, limit: Int = 400): List<LocalDate> {
+    if (to.isBefore(from)) return emptyList()
+    val out = ArrayList<LocalDate>()
+    var d = due
+    var guard = 0
+    while (out.size < limit && guard++ < 5000) {
+        d = nextOccurrence(rule, d, d)
+        if (d.isAfter(to)) break
+        if (!d.isBefore(from)) out += d
+    }
+    return out
 }

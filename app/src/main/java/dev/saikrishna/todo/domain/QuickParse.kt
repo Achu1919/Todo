@@ -156,6 +156,18 @@ object QuickParse {
             val rule = RepeatRule.Monthly(d ?: now.dayOfMonth)
             Hit.Repeat(rule, rule.label(), needsAnchor = d == null)
         },
+        // v0.13: every 3 months / every other month
+        Rule(Kind.Repeat, "${B}every\\s+($NUM_WORD)\\s+months?$E") { m, now ->
+            val n = number(m.groupValues[1]) ?: return@Rule null
+            if (n !in 1..24) return@Rule null
+            val rule = RepeatRule.Monthly(now.dayOfMonth, n)
+            Hit.Repeat(rule, rule.label(), needsAnchor = true)
+        },
+        // v0.13: yearly / every year / annually
+        Rule(Kind.Repeat, "$B(?:every\\s+year|yearly|annually)$E") { _, now ->
+            val rule = RepeatRule.Yearly(now.monthValue, now.dayOfMonth)
+            Hit.Repeat(rule, rule.label(), needsAnchor = true)
+        },
         Rule(Kind.Repeat, "${B}every\\s+(\\d{1,2})(?:st|nd|rd|th)(?:\\s+of\\s+(?:the|every)\\s+month)?$E") { m, _ ->
             val d = m.groupValues[1].toInt()
             if (d !in 1..31) null else RepeatRule.Monthly(d).let { Hit.Repeat(it, it.label()) }
@@ -237,6 +249,7 @@ object QuickParse {
         // ---- priority ----
         Rule(Kind.Priority, "(?<![\\p{L}\\d!])!(?:high|hi|h)$E") { _, _ -> Hit.Prio(Priority.High, "High") },
         Rule(Kind.Priority, "(?<![\\p{L}\\d!])!(?:low|lo|l)$E") { _, _ -> Hit.Prio(Priority.Low, "Low") },
+        Rule(Kind.Priority, "(?<![\\p{L}\\d!])!(?:medium|med|mid|m)$E") { _, _ -> Hit.Prio(Priority.Medium, "Medium") },
         Rule(Kind.Priority, "(?<!!)!!(?![!\\p{L}\\d])") { _, _ -> Hit.Prio(Priority.High, "High") },
     )
 
@@ -325,7 +338,8 @@ object QuickParse {
             // "every week" / "every 2 weeks" / "monthly" + a date: anchor the rule on that date.
             rule = when (rule) {
                 is RepeatRule.Weekly -> rule.copy(days = setOf(day.dayOfWeek))
-                is RepeatRule.Monthly -> RepeatRule.Monthly(day.dayOfMonth)
+                is RepeatRule.Monthly -> RepeatRule.Monthly(day.dayOfMonth, rule.every)
+                is RepeatRule.Yearly -> RepeatRule.Yearly(day.monthValue, day.dayOfMonth)
                 else -> rule
             }
         }

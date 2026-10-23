@@ -181,7 +181,7 @@ fun HomeScreen(
 
     // v0.12: the app opens on Today unless Settings > Open app on says Overview.
     var filter by rememberSaveable {
-        mutableStateOf(if (vm.settings.value?.openOn == dev.saikrishna.todo.data.StartPage.Overview) Filter.Overview else Filter.Today)
+        mutableStateOf(if (vm.settings.value?.openOn == dev.saikrishna.todo.data.StartPage.Home) Filter.Overview else Filter.Today)
     }
     // v0.12 list chips: one choice per tab for this session (null / absent = All).
     val chipFilter = remember { mutableStateMapOf<Filter, Long>() }

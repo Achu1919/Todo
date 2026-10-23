@@ -149,7 +149,7 @@ fun SettingsScreen(
             Divider()
             Column(Modifier.padding(16.dp)) {
                 Text("Your name", style = AppTheme.type.title, color = c.ink)
-                Text("Shown in the Overview greeting. Optional.", style = AppTheme.type.meta, color = c.inkSecondary)
+                Text("Shown in the Home greeting. Optional.", style = AppTheme.type.meta, color = c.inkSecondary)
                 Spacer(Modifier.height(12.dp))
                 val nameState = androidx.compose.foundation.text.input.rememberTextFieldState(settings.name)
                 androidx.compose.runtime.LaunchedEffect(nameState) {

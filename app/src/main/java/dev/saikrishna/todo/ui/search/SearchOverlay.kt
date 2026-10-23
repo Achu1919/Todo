@@ -345,6 +345,7 @@ fun SearchOverlay(vm: TodoViewModel, morph: SearchMorph, hazeState: HazeState?, 
                     FilterChip(d.label, null, f.due == d) { setF(f.copy(due = if (f.due == d) null else d)) }
                 }
                 FilterChip("High priority", null, f.priority == Priority.High) { setF(f.copy(priority = if (f.priority == Priority.High) null else Priority.High)) }
+                FilterChip("Medium", null, f.priority == Priority.Medium) { setF(f.copy(priority = if (f.priority == Priority.Medium) null else Priority.Medium)) }
                 FilterChip("Low priority", null, f.priority == Priority.Low) { setF(f.copy(priority = if (f.priority == Priority.Low) null else Priority.Low)) }
                 FilterChip("Reminder", null, f.reminder, icon = AppIcons.Clock) { setF(f.copy(reminder = !f.reminder)) }
                 FilterChip("Recurring", null, f.recurring, icon = AppIcons.Repeat) { setF(f.copy(recurring = !f.recurring)) }

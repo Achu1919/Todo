@@ -28,6 +28,8 @@ data class NewTask(
     val subtasks: List<String> = emptyList(),
     /** v0.8: share-sheet capture puts the rest of the text / the link here. */
     val notes: String = "",
+    /** v0.13 add-task toolbar: reminder this many minutes before the due time. */
+    val remindBefore: Int = 0,
 )
 
 /** What completing a task did, so it can be undone exactly. */
@@ -86,6 +88,7 @@ class TaskRepository(
                 listId = new.listId,
                 tags = Tags.join(new.tags),
                 sortOrder = sortKey,
+                remindBefore = new.remindBefore.coerceIn(0, MaxRemindBefore),
             ),
         )
         val subs = new.subtasks.map { it.trim() }.filter { it.isNotEmpty() }
@@ -109,7 +112,7 @@ class TaskRepository(
             val before = if (subs.any { !it.done }) subs else emptyList()
             if (before.isNotEmpty()) org?.completeSubtasks(id)
             var spawned: Long? = null
-            val rule = task?.repeat
+            val rule = task?.activeRepeat // v0.13: a paused rule spawns nothing
             if (task != null && !task.done && rule != null) {
                 val completedOn = Instant.ofEpochMilli(at).atZone(zone()).toLocalDate()
                 val next = nextOccurrence(rule, task.dueDay?.let(LocalDate::ofEpochDay), completedOn)
@@ -156,6 +159,9 @@ class TaskRepository(
     suspend fun setDue(id: Long, dueDay: Long?) = dao.setDue(id, dueDay)
     suspend fun setDueAt(id: Long, dueDay: Long?, dueMinute: Int?) = dao.setDueAt(id, dueDay, dueMinute?.takeIf { dueDay != null })
     suspend fun setRepeat(id: Long, rule: RepeatRule?) = dao.setRepeat(id, rule?.encode())
+    /** v0.13 Recurring view: pause / resume (the rule is kept). Stop = [setRepeat] null. */
+    suspend fun setRepeatPaused(id: Long, paused: Boolean) = dao.setRepeatPaused(id, paused)
+    suspend fun setRemindBefore(id: Long, minutes: Int) = dao.setRemindBefore(id, minutes.coerceIn(0, MaxRemindBefore))
     suspend fun setPriority(id: Long, priority: Priority) = dao.setPriority(id, priority.code)
     suspend fun setList(id: Long, listId: Long) = dao.setList(id, listId)
     suspend fun setTags(id: Long, tags: List<String>) = dao.setTags(id, Tags.join(tags))
@@ -243,6 +249,9 @@ class TaskRepository(
     fun now(): Long = clock()
     fun zone(): ZoneId = zoneOf()
 }
+
+/** v0.13: the longest reminder lead (one week). */
+const val MaxRemindBefore = 7 * 24 * 60
 
 /** Pure: a repeating task's subtasks for its next occurrence: same titles and order, all unchecked. */
 fun copySubtasksForRepeat(subs: List<Subtask>, newTaskId: Long): List<Subtask> =

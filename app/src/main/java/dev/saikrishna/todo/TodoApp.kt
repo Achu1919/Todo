@@ -5,7 +5,7 @@ import dev.saikrishna.todo.data.SettingsRepository
 import dev.saikrishna.todo.data.Task
 import dev.saikrishna.todo.data.TaskRepository
 import dev.saikrishna.todo.data.TodoDatabase
-import dev.saikrishna.todo.data.dueAtMillis
+import dev.saikrishna.todo.data.remindAtMillis
 import dev.saikrishna.todo.reminders.Reminders
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +34,8 @@ class TodoApp : Application() {
         super.onCreate()
         Reminders.ensureChannel(this)
         startReminderSync()
+        // v0.13: "Open app on" Overview/Today → Home/Todo (reading already maps; this rewrites it).
+        appScope.launch { runCatching { settings.migrateOpenOn() } }
         // v0.8: the morning planning alarm follows its setting (and is re-armed at every start).
         appScope.launch { settings.plan.distinctUntilChanged().collect { dev.saikrishna.todo.reminders.PlanReminder.sync(this@TodoApp, it) } }
         startWidgetSync()
@@ -73,7 +75,7 @@ class TodoApp : Application() {
             val now = System.currentTimeMillis()
             val current = HashMap<Long, Long?>(list.size)
             for (t: Task in list) {
-                val at = t.dueAtMillis(zone)?.takeIf { !t.done && it > now }
+                val at = t.remindAtMillis(zone)?.takeIf { !t.done && it > now }
                 current[t.id] = at
                 if (!last.containsKey(t.id) || last[t.id] != at) Reminders.sync(this@TodoApp, t, now, zone)
             }
