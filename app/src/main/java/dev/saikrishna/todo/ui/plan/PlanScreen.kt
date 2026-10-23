@@ -224,6 +224,7 @@ fun PlanScreen(vm: TodoViewModel, onBack: () -> Unit) {
                                     listName = lists.firstOrNull { it.id == item.task.listId }?.let { listOfNotNull(it.emoji, it.name).joinToString(" ") },
                                     listColor = lists.firstOrNull { it.id == item.task.listId }?.color,
                                     hint = { if (top) dx.value else 0f },
+                                    showHint = top,
                                     modifier = Modifier
                                         .graphicsLayer {
                                             scaleX = scale; scaleY = scale
@@ -301,9 +302,12 @@ private fun PlanCard(
     listColor: Int?,
     hint: () -> Float,
     modifier: Modifier = Modifier,
+    showHint: Boolean = true,
 ) {
     val c = AppTheme.colors
     val t: Task = item.task
+    // v0.12.1: only the front card carries the swipe hint; it peeked out under the card behind.
+    val hintAlpha by animateFloatAsState(if (showHint) 1f else 0f, Tweens.select(), label = "plan hint")
     Box(
         modifier
             .fillMaxWidth()
@@ -347,7 +351,7 @@ private fun PlanCard(
             Text(
                 "Swipe right for today · left for tomorrow", style = AppTheme.type.meta, color = c.inkTertiary,
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp)
-                    .graphicsLayer { alpha = 1f - (kotlin.math.abs(hint()) / 0.14f).coerceIn(0f, 1f) },
+                    .graphicsLayer { alpha = hintAlpha * (1f - (kotlin.math.abs(hint()) / 0.14f).coerceIn(0f, 1f)) },
             )
         }
         Text(
