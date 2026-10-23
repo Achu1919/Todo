@@ -8,6 +8,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.performSemanticsAction
@@ -30,10 +31,10 @@ import org.robolectric.annotation.Config
 import java.time.LocalDate
 
 /**
- * v0.12.1: every tab of the header pill (Overview was inserted at index 0) shows its own page,
- * from every other tab, with the test clock under manual control like the screenshot harness.
- * Pages are identified by content only they show; chips on Done must not change the page.
- * Tab state is the Filter enum (no int indices are stored or passed in intents).
+ * v0.13: every page (Home, the four Todo views behind the switcher, Calendar) shows its own
+ * content, reached from every other page, with the test clock under manual control like the
+ * screenshot harness. The header pill shows the page's section; the switcher button its view.
+ * Chips on Done must not change the page.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36], qualifiers = "w411dp-h891dp-420dpi", application = Application::class)
@@ -67,64 +68,77 @@ class HomeTabsTest {
     }
 
     private fun role(r: Role) = SemanticsMatcher.expectValue(SemanticsProperties.Role, r)
-    private fun tabNode(f: Filter) = rule.onNode(hasText(f.title) and role(Role.Tab))
     /**
      * With autoAdvance off, one big advanceTimeBy() right after a semantics click runs before the
-     * click's snapshot change is applied, so the UI lags one action behind (the v0.12.0
-     * categories sheet showed Upcoming for Done). Idle first, then advance in frame-sized steps.
+     * click's snapshot change is applied, so the UI lags one action behind. Idle first, then
+     * advance in frame-sized steps.
      */
     private fun settle(ms: Long = 1_200) {
         rule.waitForIdle()
         repeat((ms / 100).toInt()) { rule.mainClock.advanceTimeBy(100); rule.waitForIdle() }
     }
+    private fun go(f: Filter) = NavTest.go(rule, f) { settle() }
+    private fun has(text: String) = rule.onAllNodes(hasText(text)).fetchSemanticsNodes().isNotEmpty()
+    private fun hasTag(tag: String) = rule.onAllNodes(hasTestTag(tag), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
 
-    /** Text that only that page shows. */
-    private val marker = mapOf(
-        Filter.Overview to "Plan your day",
-        Filter.Today to "Today personal task",
-        Filter.Upcoming to "Later personal task",
-        Filter.Done to "Finished personal task",
-    )
+    /** Content that only that page shows. */
+    private fun shows(f: Filter): Boolean = when (f) {
+        Filter.Overview -> has("Plan your day")
+        Filter.Today -> has("Today personal task") && !has("Later personal task")
+        Filter.Upcoming -> has("Later personal task") && !has("Finished personal task")
+        Filter.Recurring -> has("Nothing repeats yet.")
+        Filter.Done -> has("Finished personal task") && !has("Later personal task")
+        Filter.Calendar -> hasTag("calendar-grid")
+    }
 
     private fun assertOn(f: Filter, step: String) {
-        for (o in Filter.entries) {
-            if (o == f) tabNode(o).assertIsSelected() else tabNode(o).assertIsNotSelected()
-            val n = rule.onAllNodes(hasText(marker.getValue(o))).fetchSemanticsNodes().size
-            if (o == f) assert(n > 0) { "$step: page ${f.title} lacks '${marker[o]}'" }
-            else if (o != Filter.Overview && f != Filter.Overview) assert(n == 0) { "$step: page ${f.title} shows ${o.title}'s '${marker[o]}'" }
+        for (s in Section.entries) {
+            val tab = rule.onNode(NavTest.sectionTab(s))
+            if (s == f.section) tab.assertIsSelected() else tab.assertIsNotSelected()
+        }
+        assert(shows(f)) { "$step: page ${f.title} lacks its content" }
+        if (f.isTodoView) {
+            val label = rule.onNode(hasTestTag("view-switcher"), useUnmergedTree = true).fetchSemanticsNode()
+                .config.getOrElseNullable(SemanticsProperties.ContentDescription) { null }?.joinToString()
+            assert(label == "View: ${f.title}") { "$step: switcher shows $label" }
         }
     }
 
-    @Test fun tabIndicesAfterOverview() {
-        assert(Filter.entries.map { it.title } == listOf("Overview", "Today", "Upcoming", "Done"))
+    @Test fun pagesAndSections() {
+        assert(Filter.entries.map { it.title } == listOf("Home", "Today", "Upcoming", "Recurring", "Done", "Calendar"))
+        assert(Section.entries.map { it.title } == listOf("Home", "Todo", "Calendar"))
+        assert(TodoViews == listOf(Filter.Today, Filter.Upcoming, Filter.Recurring, Filter.Done))
     }
 
-    @Test fun everyTabFromEveryTabWithOneSettle() {
+    @Test fun everyPageFromEveryPageWithOneSettle() {
         start()
         assertOn(Filter.Today, "launch")
         for (from in Filter.entries) for (to in Filter.entries) {
             if (from == to) continue
-            tabNode(from).performSemanticsAction(SemanticsActions.OnClick); settle()
-            assertOn(from, "go ${from.title}")
-            tabNode(to).performSemanticsAction(SemanticsActions.OnClick); settle()
-            assertOn(to, "${from.title} -> ${to.title}")
+            go(from); assertOn(from, "go ${from.title}")
+            go(to); assertOn(to, "${from.title} -> ${to.title}")
         }
     }
 
+    @Test fun todoTabReturnsToTheLastView() {
+        start()
+        go(Filter.Done); assertOn(Filter.Done, "done")
+        go(Filter.Calendar); assertOn(Filter.Calendar, "calendar")
+        NavTest.section(rule, Section.Todo) { settle() }
+        assertOn(Filter.Done, "todo tab brings back Done")
+    }
+
     @Test fun chipThenUpcomingThenDone() {
-        // The exact sequence of the v012 categories shot.
         start()
         rule.onNode(hasText("Work") and role(Role.RadioButton)).performSemanticsAction(SemanticsActions.OnClick); settle()
-        tabNode(Filter.Today).assertIsSelected()
-        assert(rule.onAllNodes(hasText("Today work task")).fetchSemanticsNodes().isNotEmpty())
-        assert(rule.onAllNodes(hasText("Today personal task")).fetchSemanticsNodes().isEmpty()) { "Work chip on Today" }
-        tabNode(Filter.Upcoming).performSemanticsAction(SemanticsActions.OnClick); settle()
-        assertOn(Filter.Upcoming, "upcoming")
-        tabNode(Filter.Done).performSemanticsAction(SemanticsActions.OnClick); settle()
-        assertOn(Filter.Done, "done")
+        assert(has("Today work task"))
+        assert(!has("Today personal task")) { "Work chip on Today" }
+        go(Filter.Upcoming); assertOn(Filter.Upcoming, "upcoming")
+        go(Filter.Done); assertOn(Filter.Done, "done")
         rule.onNode(hasText("Work") and role(Role.RadioButton)).performSemanticsAction(SemanticsActions.OnClick); settle()
-        tabNode(Filter.Done).assertIsSelected()
-        assert(rule.onAllNodes(hasText("Finished work task")).fetchSemanticsNodes().isNotEmpty())
-        assert(rule.onAllNodes(hasText("Finished personal task")).fetchSemanticsNodes().isEmpty()) { "Work chip on Done" }
+        rule.onNode(NavTest.sectionTab(Section.Todo)).assertIsSelected()
+        assert(!has("Later work task")) { "still on Done" }
+        assert(has("Finished work task"))
+        assert(!has("Finished personal task")) { "Work chip on Done" }
     }
 }

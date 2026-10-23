@@ -90,6 +90,9 @@ class CaptureActivity : ComponentActivity() {
                                     )
                                 }
                             },
+                            onSaveDraft = { d, notes, listId ->
+                                scope.launch { app.repository.add(d.toNewTask(listId, extraNotes = notes)) }
+                            },
                             onFinished = ::close,
                         )
                     }

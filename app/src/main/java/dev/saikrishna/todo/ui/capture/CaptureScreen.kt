@@ -67,7 +67,10 @@ import dev.saikrishna.todo.domain.ShareCapture
 import dev.saikrishna.todo.ui.components.GlassLevel
 import dev.saikrishna.todo.ui.components.PillChip
 import dev.saikrishna.todo.ui.components.glassSurface
-import dev.saikrishna.todo.ui.home.ParseChips
+import dev.saikrishna.todo.domain.ComposerDraft
+import dev.saikrishna.todo.ui.home.ComposerToolRow
+import dev.saikrishna.todo.ui.home.DraftChips
+import dev.saikrishna.todo.ui.home.ToolPopover
 import dev.saikrishna.todo.ui.icons.AppIcons
 import dev.saikrishna.todo.ui.motion.LocalHaptics
 import dev.saikrishna.todo.ui.motion.LocalReducedMotion
@@ -101,6 +104,8 @@ fun CaptureScreen(
     preset: CapturePreset = CapturePreset(),
     /** Test seam: voice input (null = the real recogniser). */
     voiceOverride: VoiceControl? = null,
+    /** v0.13: the toolbar's merged draft (reminder lead and toolbar notes included). Null = [onSave]. */
+    onSaveDraft: ((draft: ComposerDraft.Draft, notes: String, listId: Long) -> Unit)? = null,
 ) {
     val c = AppTheme.colors
     val haptics = LocalHaptics.current
@@ -116,6 +121,9 @@ fun CaptureScreen(
     var listTouched by remember { mutableStateOf(false) }
     if (!listTouched) chosenList = startList
     var dueToday by remember { mutableStateOf(preset.dueToday) }
+    // v0.13 add-task toolbar (same tools as the composer).
+    var picks by remember { mutableStateOf(ComposerDraft.Picks()) }
+    var activeTool by remember { mutableStateOf<ComposerDraft.Tool?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val voice = voiceOverride ?: remember { RealVoice(dev.saikrishna.todo.ui.home.VoiceInput(context.applicationContext)) }
     androidx.compose.runtime.DisposableEffect(voice) { onDispose { voice.cancel() } }
@@ -166,15 +174,23 @@ fun CaptureScreen(
     val raw = QuickParse.parse(title.text.toString(), clock(), ignored, lists)
     // "Due today" preset: today unless the text names a day.
     val parsed = applyDueToday(raw, dueToday, clock().toLocalDate())
-    val listId = parsed.list?.id ?: chosenList
+    val draftNow = ComposerDraft.merge(parsed, picks, clock(), lists)
+    val listId = draftNow.listId ?: chosenList
 
     fun save() {
         if (parsed.title.isBlank() || savedLabel != null) return
         if (voice.listening) voice.stop()
         haptics.thump()
-        onSave(parsed, notes.text.toString(), listId)
+        val d = draftNow
+        val toDraft = onSaveDraft
+        if (toDraft != null) toDraft(d, notes.text.toString(), listId)
+        else onSave(
+            parsed.copy(dueDay = d.dueDay, dueMinute = d.dueMinute, priority = d.priority, repeat = d.repeat),
+            listOf(notes.text.toString(), d.notes).filter { it.isNotBlank() }.joinToString("\n\n"),
+            listId,
+        )
         val today = clock().toLocalDate()
-        val day = parsed.dueDay
+        val day = d.dueDay
         savedLabel = when {
             day == null || day == today -> "Added to Today"
             day.isBefore(today) -> "Added to Today"
@@ -222,6 +238,18 @@ fun CaptureScreen(
                 if (label != null) Confirm(label)
                 else Form(
                     title = title, notes = notes, parsed = parsed, lists = lists, listId = listId,
+                    draft = draftNow,
+                    picks = picks,
+                    activeTool = activeTool,
+                    today = clock().toLocalDate(),
+                    onPicks = { picks = it },
+                    onTool = { t -> haptics.tick(); activeTool = if (activeTool == t) null else t },
+                    onClearChip = { chip ->
+                        haptics.tick()
+                        if (chip.tool == ComposerDraft.Tool.Date && dueToday && picks.day == null) dueToday = false
+                        val (p, ig) = ComposerDraft.clear(chip, picks, ignored)
+                        picks = p; ignored = ig
+                    },
                     focus = focus,
                     dueToday = dueToday,
                     onDueToday = { haptics.tick(); dueToday = !dueToday },
@@ -230,7 +258,7 @@ fun CaptureScreen(
                     voiceHint = voiceHint,
                     onVoice = { toggleVoice() },
                     onRemoveToken = { t -> haptics.tick(); ignored = ignored + t.key },
-                    onList = { id -> haptics.tick(); listTouched = true; chosenList = id; ignored = ignored + parsed.tokens.filter { it.kind == QuickParse.Kind.List }.map { it.key } },
+                    onList = { id -> haptics.tick(); listTouched = true; chosenList = id; picks = picks.copy(listId = null); ignored = ignored + parsed.tokens.filter { it.kind == QuickParse.Kind.List }.map { it.key } },
                     onCancel = { leave() },
                     onSave = { save() },
                 )
@@ -246,6 +274,13 @@ private fun Form(
     parsed: QuickParse.Result,
     lists: List<TaskList>,
     listId: Long,
+    draft: ComposerDraft.Draft,
+    picks: ComposerDraft.Picks,
+    activeTool: ComposerDraft.Tool?,
+    today: java.time.LocalDate,
+    onPicks: (ComposerDraft.Picks) -> Unit,
+    onTool: (ComposerDraft.Tool) -> Unit,
+    onClearChip: (ComposerDraft.Chip) -> Unit,
     focus: FocusRequester,
     dueToday: Boolean,
     onDueToday: () -> Unit,
@@ -292,7 +327,21 @@ private fun Form(
             },
         )
         Spacer(Modifier.height(10.dp))
-        ParseChips(tokens = parsed.tokens, onRemove = onRemoveToken, lists = lists, inset = 20.dp)
+        // v0.13: the toolbar's chips (typed or picked; tap to change, x to clear) and its pickers.
+        DraftChips(
+            draft = draft,
+            tagTokens = parsed.tokens.filter { it.kind == QuickParse.Kind.Tag },
+            lists = lists,
+            onOpen = onTool,
+            onClear = onClearChip,
+            onRemoveTag = onRemoveToken,
+            inset = 20.dp,
+        )
+        ToolPopover(
+            tool = activeTool, draft = draft, picks = picks, today = today, lists = lists,
+            onPicks = onPicks, onClose = { activeTool?.let(onTool) },
+            modifier = Modifier.padding(horizontal = 12.dp),
+        )
         BasicTextField(
             state = notes,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).semantics { contentDescription = "Notes" },
@@ -325,6 +374,7 @@ private fun Form(
                 )
             }
         }
+        ComposerToolRow(visible = true, draft = draft, active = activeTool, onTool = onTool, inset = 20.dp)
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(

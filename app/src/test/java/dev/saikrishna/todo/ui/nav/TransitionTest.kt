@@ -221,10 +221,10 @@ class TransitionTest {
 
     private fun cycle(screen: String, viaGesture: Boolean) {
         val tag = "screen-$screen"
-        // v0.9: Settings is a row in the lists panel; open the panel first, the push starts at the row tap.
-        if (screen == "Settings") openListsPanel()
+        // v0.13: Settings is the gear on Home; go Home first, the push starts at the gear tap.
+        if (screen == "Settings") goHome()
         val pushRun = record(50, tag, {
-            if (screen == "Settings") rule.onNodeWithText("Settings").performSemanticsAction(SemanticsActions.OnClick)
+            if (screen == "Settings") rule.onNodeWithTag("home-settings").performSemanticsAction(SemanticsActions.OnClick)
             else rule.onNodeWithContentDescription(screen).performSemanticsAction(SemanticsActions.OnClick)
         })
         val pushed = settled()
@@ -313,17 +313,16 @@ class TransitionTest {
     @Test fun settingsGesture() = cycle("Settings", viaGesture = true)
     // v0.11: Search is no longer a pushed screen (in-place morph: SearchMorphTest).
 
-    /** v0.9: Settings lives in the lists panel (bottom-left lists button), no longer in the header. */
-    private fun openListsPanel() {
+    /** v0.13: Settings is the gear on Home (header pill: Home · Todo · Calendar). */
+    private fun goHome() {
         rule.mainClock.autoAdvance = true
-        rule.onNodeWithTag("lists-button").performSemanticsAction(SemanticsActions.OnClick)
-        rule.waitUntil(5_000) { rule.onAllNodesWithTag("lists-panel", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
-        rule.mainClock.advanceTimeBy(1_000)
+        dev.saikrishna.todo.ui.home.NavTest.section(rule, dev.saikrishna.todo.ui.home.Section.Home) { rule.waitForIdle(); rule.mainClock.advanceTimeBy(1_000) }
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("home-settings").fetchSemanticsNodes().isNotEmpty() }
     }
 
     private fun openSettings() {
-        openListsPanel()
-        rule.onNodeWithText("Settings").performSemanticsAction(SemanticsActions.OnClick)
+        goHome()
+        rule.onNodeWithTag("home-settings").performSemanticsAction(SemanticsActions.OnClick)
     }
 
 }
