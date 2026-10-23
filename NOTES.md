@@ -1201,3 +1201,19 @@ Scope agreed with Sai (pt32u/pt33u).
   - filmstrips `v013-{switcher,calendar-pull,toolbar}-filmstrip-*.png`;
   - sheets `out/shots/v013-switcher.png`, `v013-calendar.png` and `v013-add-toolbar.png` (`scripts/v013_sheets.py`).
 - Release: 6,044,194 bytes, debug-key signed, aapt 23/0.13.0, verify_release OK. Copied to `../todo-v0.13.0.apk`.
+
+## Milestone 13.1 (v0.13.1, versionCode 24)
+
+- **Blank collapsed week strip (real bug, not harness timing).** The month grid Column was measured
+  under the clip Box's bounded height (one 46 dp row when collapsed). Each week row has a fixed
+  height but was coerced to the remaining space, so every row after the first measured 0 dp, including
+  the selected week, which is shown by shifting it up with translationY. Numbers only appeared once the
+  pull grew the box. Fix: `wrapContentHeight(Alignment.Top, unbounded = true)` on the grid Column.
+- New `CalendarWeekStripTest` (light + dark): 7 day cells ≥ 40 dp, one top, left to right, inside the
+  grid; day-number text visible; pixel checks for each number, the selected circle and the dots; also
+  after swiping to next week and tapping Today. Failed before the fix ("cell has height 0"), passes after.
+  `V13ScreenshotTest.calendar()` runs the same check, so an empty strip fails the shot.
+- Review fixes: Calendar day rows now use the screen gutter (20 dp) and row gap (were 8 dp with no gap);
+  soft 24 dp end/start fade on the scrolling composer toolbar, draft-chip and list-chip rows (only on a
+  side with more content), replacing the hard clip.
+- Full suite with shots: 465 tests, 0 failures (SearchMorphTest green). APK 6,044,190 bytes.
