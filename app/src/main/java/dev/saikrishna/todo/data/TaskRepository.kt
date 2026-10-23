@@ -161,6 +161,25 @@ class TaskRepository(
     suspend fun setRepeat(id: Long, rule: RepeatRule?) = dao.setRepeat(id, rule?.encode())
     /** v0.13 Recurring view: pause / resume (the rule is kept). Stop = [setRepeat] null. */
     suspend fun setRepeatPaused(id: Long, paused: Boolean) = dao.setRepeatPaused(id, paused)
+    /** v0.13 Recurring view "Stop repeating": drop the rule and any pause. */
+    suspend fun stopRepeat(id: Long) = inTransaction { dao.setRepeat(id, null); dao.setRepeatPaused(id, false) }
+    /**
+     * v0.13 Calendar drag: move to [day] keeping the time; a repeating task's rule follows the move
+     * ([CalendarData.reanchor]). Returns false when nothing changed.
+     */
+    suspend fun moveToDay(id: Long, day: java.time.LocalDate): Boolean {
+        var changed = false
+        inTransaction {
+            val t = dao.get(id) ?: return@inTransaction
+            val (newDay, _) = dev.saikrishna.todo.domain.CalendarData.reschedule(t, day) ?: return@inTransaction
+            dao.setDueKeepTime(id, newDay)
+            val rule = t.repeat
+            val moved = dev.saikrishna.todo.domain.CalendarData.reanchor(rule, day)
+            if (moved != rule) dao.setRepeat(id, moved?.encode())
+            changed = true
+        }
+        return changed
+    }
     suspend fun setRemindBefore(id: Long, minutes: Int) = dao.setRemindBefore(id, minutes.coerceIn(0, MaxRemindBefore))
     suspend fun setPriority(id: Long, priority: Priority) = dao.setPriority(id, priority.code)
     suspend fun setList(id: Long, listId: Long) = dao.setList(id, listId)
