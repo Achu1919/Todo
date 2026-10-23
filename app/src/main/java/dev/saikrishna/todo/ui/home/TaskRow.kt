@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -129,6 +130,16 @@ fun TaskRow(
 internal fun MetaLine(meta: RowMeta, modifier: Modifier = Modifier, onTag: ((String) -> Unit)? = null) {
     val c = AppTheme.colors
     val style = AppTheme.type.meta
+    if (meta.repeatLabel != null && meta.dueLabel != null) {
+        // v0.13 Recurring view: rule + list on the first line, the next date on its own line, so
+        // a narrow row never squeezes "Next · Today · 9:30 am" into a wrapped column.
+        Column(modifier) {
+            MetaLine(meta.copy(dueLabel = null, overdue = false), onTag = onTag)
+            Spacer(Modifier.height(2.dp))
+            MetaLine(meta.copy(repeatLabel = null, listName = null, tags = emptyList(), progress = null, hasNotes = false, priority = Priority.None))
+        }
+        return
+    }
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         var needsSep = false
         if (meta.repeatLabel != null) {
