@@ -64,14 +64,16 @@ class ComposerHintTest {
         fun p(s: String) = QuickParse.parse(s, now, lists = lists)
         val all = ComposerHints.Examples.map(::p)
         all.forEachIndexed { i, r -> assertFalse("'${ComposerHints.Examples[i]}' parsed as plain text", r.isPlain) }
-        all[0].let { assertEquals("Call mom", it.title); assertEquals(now.toLocalDate().plusDays(1), it.dueDay); assertEquals(18 * 60, it.dueMinute) }
-        all[1].let { assertEquals("Pay rent", it.title); assertEquals(RepeatRule.Monthly(1), it.repeat) }
-        all[2].let { assertEquals("Groceries", it.title); assertEquals(TaskList.PERSONAL, it.list?.id) }
+        all[0].let { assertEquals("Call mom", it.title); assertEquals(18 * 60, it.dueMinute) }
+        all[1].let { assertEquals("Rent", it.title); assertEquals(RepeatRule.Monthly(1), it.repeat) }
+        all[2].let { assertEquals("Milk", it.title); assertEquals(TaskList.PERSONAL, it.list?.id) }
         all[3].let {
-            assertEquals("Review deck", it.title); assertEquals(Priority.High, it.priority)
+            assertEquals("Deck", it.title); assertEquals(Priority.High, it.priority)
             assertEquals(now.toLocalDate().with(TemporalAdjusters.next(DayOfWeek.FRIDAY)), it.dueDay)
         }
-        all[4].let { assertEquals("Water plants", it.title); assertEquals(RepeatRule.Daily(3), it.repeat) }
+        all[4].let { assertEquals("Water plants", it.title); assertEquals(RepeatRule.Daily(1), it.repeat) }
+        // v0.12.1: short enough not to truncate in the pill at font scale 1.3.
+        ComposerHints.Examples.forEach { assertTrue("'$it' is too long for the pill", it.length <= 19) }
         assertEquals("Add a task", ComposerHints.All.first())
     }
 
