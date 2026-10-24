@@ -1217,3 +1217,24 @@ Scope agreed with Sai (pt32u/pt33u).
   soft 24 dp end/start fade on the scrolling composer toolbar, draft-chip and list-chip rows (only on a
   side with more content), replacing the hard clip.
 - Full suite with shots: 465 tests, 0 failures (SearchMorphTest green). APK 6,044,190 bytes.
+
+## Milestone 13.2 (v0.13.2, versionCode 25)
+
+- **Theme toggle moved to the top bar.** The bar is now: search circle (left) | Home · Todo · Calendar
+  pill (centre) | theme toggle (right), on all three tabs. Both circles are the same 44 dp glass control,
+  on the same centre line, with the same 20 dp edge inset; the pill box has 10 dp padding on both
+  sides, so the pill sits at the exact screen centre. The toggle is gone from the Home greeting and
+  the Calendar header. The circular reveal still starts from the toggle (`onGloballyPositioned`
+  centre); reduced motion, haptics, press tint and the long-press theme menu are unchanged.
+- The gear (Settings) stays in the Home greeting row for now.
+- New `TopBarTest` / `TopBarNarrowTest` (412 and 360 dp × light/dark × 1.0/1.3): one toggle; same
+  size/centre/inset as search; pill centred within 1.5 dp with ≥ 8 dp gaps; tab labels on one line,
+  no ellipsis, glyphs inside the text box. (`didOverflowWidth` is not usable: the pill's intrinsic pass
+  leaves the paragraph wider than the segment.) `ThemeRevealTest` also checks the toggle is in the
+  right slot and that the reveal centre equals the toggle centre.
+- **Settings entry: proposals only** (`SettingsOptionsMockTest` paints over the real Home; nothing
+  ships): a) initial circle from the Name field in the gear's place, b) a Settings row at the end of
+  Home, c) Settings in the top-left slot with search moved into the composer. Long-press on the theme
+  toggle was rejected (hidden). Recommendation: a). Sheet `out/shots/v0132-settings-options.png`.
+- Sheets: `out/shots/v0132-topbar.png`, `v0132-settings-options.png` (`scripts/v0132_sheets.py`).
+- Full suite with shots: 475 tests, 0 failures. APK 6,044,194 bytes, debug-signed, verify_release OK.
