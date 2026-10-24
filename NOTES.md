@@ -1238,3 +1238,28 @@ Scope agreed with Sai (pt32u/pt33u).
   toggle was rejected (hidden). Recommendation: a). Sheet `out/shots/v0132-settings-options.png`.
 - Sheets: `out/shots/v0132-topbar.png`, `v0132-settings-options.png` (`scripts/v0132_sheets.py`).
 - Full suite with shots: 475 tests, 0 failures. APK 6,044,194 bytes, debug-signed, verify_release OK.
+
+## Milestone 13.3 (v0.13.3, versionCode 26)
+
+- **Settings entry = profile circle** (option a from v0.13.2). The gear in the Home greeting row is
+  replaced by `ProfileButton` (`ui/home/ProfileButton.kt`): a 44 dp circle showing the first
+  grapheme of the Name field, or a person glyph (`AppIcons.Person`) when the name is empty. It is
+  a glass control under an accent tint (0.17 light / 0.26 dark) with a 1 dp accent ring, so it reads
+  as personal and tappable and is clearly unlike the plain-glass search / theme circles in the top bar
+  (ring-colour distance to the toggle is measured: ~27 light, ~65 dark, test requires > 18). The mark
+  is Newsreader at a fixed 21 dp (it lives in a fixed circle, so it does not grow at 1.3x).
+  Same press tint, 0.94 press scale (snaps under reduced motion), haptic tick, and the same
+  `nav.push(Screen.Settings)` slide. Content description "Settings, profile", click label
+  "Open settings"; tag stays `home-settings`, so every existing Settings path/test is unchanged.
+- `profileInitial(name, locale)`: trims, takes the first extended grapheme cluster
+  (`BreakIterator.getCharacterInstance`), uppercases only if the result is still one cluster
+  ("ß" stays "ß"; Turkish "i" → "İ"); emoji ZWJ sequences, skin tones and flags stay whole;
+  Devanagari consonant + vowel sign ("सु") stays together; blank → null (glyph).
+- Gear removed: `AppIcons.Gear` deleted (no other users), comments updated, and
+  `SettingsOptionsMockTest` retired (its "current" baseline no longer exists; the v0.13.2 option PNGs remain).
+- Tests: `ProfileInitialTest` (5) and `ProfileEntryTest` / `ProfileEntryNarrowTest` (9 + 4:
+  light/dark, 1.0/1.3, name/empty, emoji, Devanagari, 412/360 dp): one `home-settings` node with
+  the description, initial or glyph, 44 dp, right edge aligned with the theme toggle, greeting clear
+  of the circle, colour distinct from the toggle, tap opens Settings.
+- Sheet: `out/shots/v0133-settings-entry.png` (`scripts/v0133_sheets.py`).
+- Full suite with shots: 491 tests, 0 failures. APK 6,044,194 bytes (`../todo-v0.13.3.apk`), debug-signed, 26 / "0.13.3", verify_release OK.
