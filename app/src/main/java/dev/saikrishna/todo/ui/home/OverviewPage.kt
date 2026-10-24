@@ -101,7 +101,6 @@ fun OverviewPage(
     model: OverviewModel,
     listState: LazyListState,
     contentPadding: PaddingValues,
-    themeButton: @Composable () -> Unit,
     onTarget: (OverviewTarget) -> Unit,
     onList: (Long) -> Unit,
     onPlan: () -> Unit,
@@ -136,8 +135,7 @@ fun OverviewPage(
                     Text(model.greeting, style = AppTheme.type.display, color = AppTheme.colors.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(model.dateLine, style = AppTheme.type.body, color = AppTheme.colors.inkSecondary, modifier = Modifier.padding(top = 2.dp))
                 }
-                if (settingsButton != null) { settingsButton(); Spacer(Modifier.width(8.dp)) }
-                themeButton()
+                settingsButton?.invoke()
             }
         }
         item(key = "hero", contentType = "hero") {

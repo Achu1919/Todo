@@ -442,8 +442,7 @@ fun HomeScreen(
         )
     }
 
-    // v0.12: with four tabs the theme toggle moved from the header into each page's heading row
-    // (next to the Overview greeting, at the end of the Today / Upcoming / Done title).
+    // v0.13.2: the theme toggle is back in the top bar, right of the nav pill, mirroring search.
     val themeButton: @Composable () -> Unit = {
         ThemeToggleButton(
             dark = darkNow,
@@ -556,7 +555,6 @@ fun HomeScreen(
                                 model = overviewModel,
                                 listState = listStates.getValue(page),
                                 contentPadding = padding,
-                                themeButton = themeButton,
                                 onTarget = { t ->
                                     haptics.tick()
                                     when (t) {
@@ -601,7 +599,6 @@ fun HomeScreen(
                                 selected = calendarDay?.let(LocalDate::ofEpochDay) ?: today,
                                 onSelect = { calendarDay = it.toEpochDay() },
                                 contentPadding = padding,
-                                themeButton = themeButton,
                                 onToggle = { t, checked -> actions.onToggle(t, checked, pageOf(t, today)) },
                                 onOpen = actions.onOpen,
                                 onMove = { t, day -> vm.moveToDay(t.id, day) },
@@ -628,7 +625,6 @@ fun HomeScreen(
                             actions = actions,
                             heading = headingFor(page, today),
                             caption = captionFor(page, pages, items, chipId != null),
-                            headingTrailing = themeButton,
                             headingExtra = {
                                 // Only worth a row when the page mixes at least two lists (or one is picked).
                                 val options = if (chipsOn) chipOptions(pages[page], chipLists, chipId) else emptyList()
@@ -650,6 +646,7 @@ fun HomeScreen(
                     lastTodo = lastTodo,
                     onFilter = { chrome.dismiss(); filter = it },
                     onOpenSearch = { openSearch() },
+                    trailing = themeButton,
                     searchCircle = Modifier
                         .onGloballyPositioned { if (!search.active) search.circle = it.boundsInRoot() }
                         // The pill takes over the circle's place (reduced motion: it crossfades).
@@ -861,6 +858,7 @@ private fun HomeHeader(
     lastTodo: Filter,
     onFilter: (Filter) -> Unit,
     onOpenSearch: () -> Unit,
+    trailing: @Composable () -> Unit,
     searchCircle: Modifier,
     modifier: Modifier = Modifier,
 ) {
@@ -868,7 +866,7 @@ private fun HomeHeader(
     Box(modifier.fillMaxWidth()) {
         // Blurred, tinted edge behind the controls, fading out (eased) by 30 dp below them.
         GlassEdgeTop(solidHeight = statusTop + HeaderTop + PillSpec.Height)
-        HeaderControls(filter, { onFilter(it.target(lastTodo)) }, onOpenSearch, searchCircle)
+        HeaderControls(filter, { onFilter(it.target(lastTodo)) }, onOpenSearch, searchCircle, trailing)
     }
 }
 
@@ -878,9 +876,11 @@ private fun HeaderControls(
     onSection: (Section) -> Unit,
     onOpenSearch: () -> Unit,
     searchCircle: Modifier,
+    trailing: @Composable () -> Unit,
 ) {
-    // v0.12: search (left) + the Overview/Today/Upcoming/Done pill centred in the rest of the row
-    // (mock "Overview A"). The theme toggle lives in the page headings now.
+    // v0.13.2: search circle (left) | Home · Todo · Calendar pill | theme toggle (right). Both
+    // circles are 44 dp glass at the same 20 dp inset and the pill box has the same 10 dp gap on
+    // each side, so the pill is centred on the screen, not just in the space after search.
     androidx.compose.foundation.layout.Row(
         Modifier
             .fillMaxWidth()
@@ -889,7 +889,7 @@ private fun HeaderControls(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         CircleIconButton(AppIcons.Search, "Search", onOpenSearch, searchCircle, glass = true)
-        Box(Modifier.weight(1f).padding(start = 10.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.weight(1f).padding(horizontal = 10.dp).testTag("header-nav-slot"), contentAlignment = Alignment.Center) {
             SegmentedPill(
                 options = Section.entries.toList(),
                 selected = filter.section,
@@ -898,6 +898,7 @@ private fun HeaderControls(
                 style = PillStyle.Floating,
             )
         }
+        trailing()
     }
 }
 

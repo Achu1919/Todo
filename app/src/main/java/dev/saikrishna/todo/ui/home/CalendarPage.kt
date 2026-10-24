@@ -138,7 +138,6 @@ fun CalendarPage(
     selected: LocalDate,
     onSelect: (LocalDate) -> Unit,
     contentPadding: PaddingValues,
-    themeButton: @Composable () -> Unit,
     onToggle: (Task, Boolean) -> Unit,
     onOpen: (Task) -> Unit,
     onMove: (Task, LocalDate) -> Unit,
@@ -186,7 +185,7 @@ fun CalendarPage(
                 .onGloballyPositioned { rootOffset = it.positionInRoot() }
                 .padding(top = contentPadding.calculateTopPadding()),
         ) {
-            // Month title, Today, add, theme.
+            // Month title, Today, add.
             Row(Modifier.fillMaxWidth().padding(start = 22.dp, end = 16.dp, top = 6.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     month.month.getDisplayName(TextStyle.FULL, locale) + if (month.year != today.year) " ${month.year}" else "",
@@ -206,8 +205,6 @@ fun CalendarPage(
                     Spacer(Modifier.width(8.dp))
                 }
                 CircleIconButton(AppIcons.Plus, "Add a task on ${calDayLabel(selected, today, locale)}", { haptics.tick(); onAddOn(selected) }, Modifier.testTag("calendar-add"))
-                Spacer(Modifier.width(8.dp))
-                themeButton()
             }
             // Weekday row.
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
