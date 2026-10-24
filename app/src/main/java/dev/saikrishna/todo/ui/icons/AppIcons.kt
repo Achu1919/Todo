@@ -276,16 +276,11 @@ object AppIcons {
         icon("Play") { stroke(2f) { moveTo(8.5f, 6f); lineTo(18f, 12f); lineTo(8.5f, 18f); close() } }
     }
 
-    /** Settings gear: a ring with six short teeth. */
-    val Gear: ImageVector by lazy {
-        icon("Gear") {
-            stroke(1.9f) { circle(12f, 12f, 3f) }
-            stroke(1.9f) { circle(12f, 12f, 6.5f) }
-            for (k in 0 until 6) {
-                val a = Math.toRadians(k * 60.0 + 30.0)
-                val c = kotlin.math.cos(a).toFloat(); val sn = kotlin.math.sin(a).toFloat()
-                stroke(2.6f) { moveTo(12f + 7.2f * c, 12f + 7.2f * sn); lineTo(12f + 9f * c, 12f + 9f * sn) }
-            }
+    /** Person: round head over rounded shoulders (profile circle when no name is set). */
+    val Person: ImageVector by lazy {
+        icon("Person") {
+            stroke(1.9f) { circle(12f, 8.6f, 3.6f) }
+            stroke(1.9f) { moveTo(5.2f, 19.6f); curveTo(5.6f, 15.9f, 8.4f, 13.9f, 12f, 13.9f); curveTo(15.6f, 13.9f, 18.4f, 15.9f, 18.8f, 19.6f) }
         }
     }
 

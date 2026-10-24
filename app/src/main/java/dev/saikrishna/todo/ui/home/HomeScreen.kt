@@ -573,7 +573,8 @@ fun HomeScreen(
                                     filter = Filter.Today
                                 },
                                 settingsButton = {
-                                    CircleIconButton(AppIcons.Gear, "Settings", { haptics.tick(); onOpenSettings() }, Modifier.testTag("home-settings"), glass = true)
+                                    // v0.13.3: the profile circle (Name's first grapheme / person glyph) replaces the gear.
+                                    ProfileButton(greetingName, { haptics.tick(); onOpenSettings() })
                                 },
                                 views = views,
                                 onView = { v ->

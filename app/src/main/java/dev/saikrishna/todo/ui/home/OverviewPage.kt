@@ -109,7 +109,7 @@ fun OverviewPage(
     taskAnchor: (Long) -> Modifier,
     modifier: Modifier = Modifier,
     animatorScale: Float = 1f,
-    /** v0.13: Settings moved from the old lists panel to a gear next to the greeting. */
+    /** Settings entry next to the greeting (v0.13 gear; v0.13.3 the profile circle). */
     settingsButton: (@Composable () -> Unit)? = null,
     /** v0.13: list management (Settings > Lists) and the saved views, also from the old panel. */
     views: List<dev.saikrishna.todo.data.SavedView> = emptyList(),
