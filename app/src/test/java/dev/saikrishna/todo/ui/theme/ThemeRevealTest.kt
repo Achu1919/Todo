@@ -154,6 +154,11 @@ class ThemeRevealTest {
         val frames = run()
         val settled = frames.last().bmp; val settledPx = px(settled)
         val w = before.width
+        // v0.13.2: the toggle sits in the top bar (right of the nav, 20 dp from the edge) and the
+        // circle starts from its centre.
+        val dp = 420f / 160f
+        if (button.top > 120 * dp || kotlin.math.abs((w - button.right) - 20 * dp) > 2f) fails += "$name: toggle not in the top bar's right slot: $button"
+        if (hypot(reveal.centerPx.x - button.center.x, reveal.centerPx.y - button.center.y) > 1f) fails += "$name: reveal centre ${reveal.centerPx} != toggle ${button.center}"
         // Frame 0 (first stepped frame) == the old theme, pixel for pixel.
         val d0 = diffCount(px(frames[0].bmp), beforePx)
         if (d0 != 0) {
