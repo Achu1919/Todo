@@ -130,7 +130,7 @@ abstract class TopBarBase(private val dark: Boolean, private val scale: Float) {
             check(sec.name)
             save(sec.name.lowercase())
         }
-        // Home's greeting row keeps only the gear (Settings) now.
+        // Home's greeting row keeps only the Settings entry (profile circle since v0.13.3).
         NavTest.section(rule, Section.Home) { settle() }
         assertEquals(1, rule.onAllNodes(androidx.compose.ui.test.hasTestTag("home-settings")).fetchSemanticsNodes().size)
         // The toggle still switches the theme (no reveal host here: straight to the setting).

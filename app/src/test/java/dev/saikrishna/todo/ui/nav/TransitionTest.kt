@@ -221,7 +221,7 @@ class TransitionTest {
 
     private fun cycle(screen: String, viaGesture: Boolean) {
         val tag = "screen-$screen"
-        // v0.13: Settings is the gear on Home; go Home first, the push starts at the gear tap.
+        // Settings is the profile circle on Home (v0.13.3; was the gear); go Home first, the push starts at the tap.
         if (screen == "Settings") goHome()
         val pushRun = record(50, tag, {
             if (screen == "Settings") rule.onNodeWithTag("home-settings").performSemanticsAction(SemanticsActions.OnClick)
@@ -313,7 +313,7 @@ class TransitionTest {
     @Test fun settingsGesture() = cycle("Settings", viaGesture = true)
     // v0.11: Search is no longer a pushed screen (in-place morph: SearchMorphTest).
 
-    /** v0.13: Settings is the gear on Home (header pill: Home · Todo · Calendar). */
+    /** Settings is the profile circle on Home (v0.13.3; was the gear) (header pill: Home · Todo · Calendar). */
     private fun goHome() {
         rule.mainClock.autoAdvance = true
         dev.saikrishna.todo.ui.home.NavTest.section(rule, dev.saikrishna.todo.ui.home.Section.Home) { rule.waitForIdle(); rule.mainClock.advanceTimeBy(1_000) }

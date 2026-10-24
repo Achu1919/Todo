@@ -11,7 +11,7 @@ import androidx.compose.ui.test.performSemanticsAction
 
 /**
  * v0.13 navigation for tests: the header pill is Home · Todo · Calendar, the four Todo views sit
- * behind the bottom-left view switcher, and Settings is the gear on Home.
+ * behind the bottom-left view switcher, and Settings is the profile circle on Home ("home-settings").
  */
 object NavTest {
     private fun role(r: Role) = SemanticsMatcher.expectValue(SemanticsProperties.Role, r)
@@ -33,7 +33,7 @@ object NavTest {
         }
     }
 
-    /** Settings: Home's gear (the push starts at the gear tap). */
+    /** Settings: Home's profile circle (the push starts at the tap). */
     fun openSettings(rule: ComposeTestRule, settle: () -> Unit) {
         section(rule, Section.Home, settle)
         rule.onNode(hasTestTag("home-settings")).performSemanticsAction(SemanticsActions.OnClick)
